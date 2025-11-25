@@ -27,7 +27,14 @@ class FileServer:
 
     async def handle_message(self, message, websocket):
         try:
-            data = json.loads(message)
+            if isinstance(message, str):
+                data = json.loads(message)
+            elif isinstance(message, dict):
+                data = message
+            else:
+                await websocket.send(json.dumps({"error": "Невалидные данные"}))
+                return
+
             command = data.get('command')
 
             response = await self.process_command(command, data)
@@ -42,6 +49,8 @@ class FileServer:
     async def process_command(self, command, data):
         if command == 'ping':
             return {'status': 'success', 'response': 'pong'}
+        elif command == 'get_all_videos':
+            return {'status': 'success', 'data': self.get_all_videos()}
         else:
             return {'status': 'error', 'response': 'Неизвестная команда'}
 
@@ -84,16 +93,57 @@ class FileServer:
             return []
 
         for channel in channels:
-            check = self.check_channel(channel)
+            channel_path = os.path.join(self.path, channel)
 
-            if check:
-                videos = os.listdir(os.path.join(self.path, channel))
+            videos_info = self.get_videos_from_channel(channel_path)
+            all_videos.extend(videos_info)
 
-                if videos:
-                    all_videos.extend(videos)
+        return all_videos
 
-        print(all_videos)
+    def get_videos_from_channel(self, channel_path):
+        videos_info = []
 
+        if not self.check_channel(channel_path):
+            return []
+
+        videos = os.listdir(channel_path)
+
+        if not videos:
+            return []
+
+        for video in videos:
+            video_path = os.path.join(channel_path, video)
+
+            video_files = self.get_video_info(video_path)
+
+            if video_files:
+                videos_info.append(video_files)
+
+        return videos_info
+
+    def get_video_info(self, video_path):
+        video_files = os.listdir(video_path)
+
+        if not video_files:
+            return None
+
+        video_file = None
+        preview_file = None
+
+        for file in video_files:
+            file_path = os.path.join(video_path, file)
+
+            if file.lower().endswith((".mp4", ".mkv", ".avi", ".mov")):
+                video_file = file_path
+
+            if file.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+                preview_file = file_path
+
+        if video_file:
+            return {
+                'video': video_file,
+                'preview': preview_file,
+            }
 
     async def start_server(self):
         print(f'Запуск сервера на ws://{self.host}:{self.port}')
@@ -104,7 +154,6 @@ class FileServer:
             await asyncio.Future()
 
     def start(self):
-        self.get_all_videos()
         asyncio.run(self.start_server())
 
 
