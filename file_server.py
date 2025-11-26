@@ -1,162 +1,142 @@
-import asyncio
-import websockets
-import json
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 import os
+import datetime
 
-from websockets.exceptions import ConnectionClosed
+VIDEO_DIR = r"D:\veFox"
+SERVER_URL = "http://localhost:5557"
 
+app = FastAPI()
 
-class FileServer:
-    def __init__(self, host='localhost', port=5557, path=r"D:\veFox"):
-        self.host = host
-        self.port = port
-        self.path = path
+# --- CORS ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-    async def handler(self, websocket):
-        try:
-            await websocket.send(json.dumps({
-                'status': 'connected',
-                'message': 'connect to server',
-            }))
+# --- статика ---
+app.mount("/static", StaticFiles(directory=VIDEO_DIR), name="static")
 
-            async for message in websocket:
-                await self.handle_message(message, websocket)
+# --- функции ---
+# проверка что это действительно канал с папками видео
+def check_channel(channel_path):
+    full_path = os.path.join(VIDEO_DIR, channel_path)
 
-        except ConnectionClosed:
-            print('Соединение разорвано')
+    videos = os.listdir(full_path)
 
-    async def handle_message(self, message, websocket):
-        try:
-            if isinstance(message, str):
-                data = json.loads(message)
-            elif isinstance(message, dict):
-                data = message
-            else:
-                await websocket.send(json.dumps({"error": "Невалидные данные"}))
-                return
+    if not videos:
+        return False
 
-            command = data.get('command')
+    if os.path.isdir(full_path):
+        check_all_videos = any(
+            os.path.isdir(os.path.join(full_path, video))
+            for video in videos
+        )
+        return check_all_videos
+    else:
+        return False
 
-            response = await self.process_command(command, data)
+# получаем каналы
+def get_channels():
+    channels = []
 
-            await websocket.send(json.dumps(response))
+    for channel in os.listdir(VIDEO_DIR):
+        if check_channel(channel):
+            channels.append({
+                'name': channel,
+                'avatar': get_channel_avatar(channel)
+            })
 
-        except json.JSONDecodeError:
-            await websocket.send(json.dumps({
-                'error': 'Невалидные JSON-данные'
-            }))
+    return channels
 
-    async def process_command(self, command, data):
-        if command == 'ping':
-            return {'status': 'success', 'response': 'pong'}
-        elif command == 'get_all_videos':
-            return {'status': 'success', 'data': self.get_all_videos()}
-        else:
-            return {'status': 'error', 'response': 'Неизвестная команда'}
+# получаем информацию о видео
+def get_video_info(video_path, video_name, channel_name, channel_avatar):
+    video_files = os.listdir(video_path)
 
-    def get_channels(self):
-        channels = []
+    if not video_files:
+        return None
 
-        for channel in os.listdir(self.path):
-            check = self.check_channel(channel)
+    video_file = next((f for f in video_files if f.lower().endswith((".mp4", ".mkv", ".avi", ".mov"))), None)
+    preview_file = next((f for f in video_files if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp"))), None)
 
-            if check:
-                channels.append(channel)
+    if video_file:
+        full_vide_path = os.path.join(video_path, video_file)
+        stats = os.stat(full_vide_path)
+        created_at = datetime.datetime.fromtimestamp(stats.st_ctime)
 
-        return channels
+        return {
+            'name': video_name,
+            'video': f"{SERVER_URL}/static/{channel_name}/{video_name}/{video_file}",
+            'preview': f"{SERVER_URL}/static/{channel_name}/{video_name}/{preview_file}" if preview_file else None,
+            'channel': channel_name,
+            'avatar': channel_avatar,
+            'date': created_at.isoformat()
+        }
 
-    # проверка что это действительно канал с папками видео
-    def check_channel(self, channel_path):
-        full_path = os.path.join(self.path, channel_path)
+# получаем видео с канала
+def get_video_from_channel(channel):
+    channel_name = channel["name"]
+    channel_avatar = channel["avatar"]
 
-        videos = os.listdir(full_path)
+    videos_info = []
 
-        if not videos:
-            return False
+    channel_path = os.path.join(VIDEO_DIR, channel_name)
 
-        if os.path.isdir(full_path):
-            check_all_videos = all(
-                os.path.isdir(os.path.join(full_path, video))
-                for video in videos
-            )
-            return check_all_videos
-        else:
-            return False
+    if not check_channel(channel_path):
+        return []
 
-    # получаем все видео
-    def get_all_videos(self):
-        all_videos = []
+    videos = os.listdir(channel_path)
 
-        channels = self.get_channels()
+    if not videos:
+        return []
 
-        if not channels:
-            return []
+    for video in videos:
+        video_path = os.path.join(channel_path, video)
 
-        for channel in channels:
-            channel_path = os.path.join(self.path, channel)
+        if not os.path.isdir(video_path):
+            continue
 
-            videos_info = self.get_videos_from_channel(channel_path)
-            all_videos.extend(videos_info)
+        video_files = get_video_info(video_path, video, channel_name, channel_avatar)
 
-        return all_videos
+        if video_files:
+            videos_info.append(video_files)
 
-    def get_videos_from_channel(self, channel_path):
-        videos_info = []
+    return videos_info
 
-        if not self.check_channel(channel_path):
-            return []
+# получаем аватарку канала
+def get_channel_avatar(channel_name):
+    channel_path = os.path.join(VIDEO_DIR, channel_name)
+    files = os.listdir(channel_path)
 
-        videos = os.listdir(channel_path)
+    avatar = next(
+        (f for f in files if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp")))
+        , None
+    )
 
-        if not videos:
-            return []
+    return f"{SERVER_URL}/static/{channel_name}/{avatar}" if avatar else None
 
-        for video in videos:
-            video_path = os.path.join(channel_path, video)
+# получаем все видео
+def get_all_videos():
+    all_videos = []
 
-            video_files = self.get_video_info(video_path)
+    channels = get_channels()
 
-            if video_files:
-                videos_info.append(video_files)
+    if not channels:
+        return []
 
-        return videos_info
+    for channel in channels:
+        videos_info = get_video_from_channel(channel)
+        all_videos.extend(videos_info)
 
-    def get_video_info(self, video_path):
-        video_files = os.listdir(video_path)
-
-        if not video_files:
-            return None
-
-        video_file = None
-        preview_file = None
-
-        for file in video_files:
-            file_path = os.path.join(video_path, file)
-
-            if file.lower().endswith((".mp4", ".mkv", ".avi", ".mov")):
-                video_file = file_path
-
-            if file.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
-                preview_file = file_path
-
-        if video_file:
-            return {
-                'video': video_file,
-                'preview': preview_file,
-            }
-
-    async def start_server(self):
-        print(f'Запуск сервера на ws://{self.host}:{self.port}')
-
-        async with websockets.serve(self.handler, self.host, self.port):
-            print('Сервер запущен')
-
-            await asyncio.Future()
-
-    def start(self):
-        asyncio.run(self.start_server())
+    return all_videos
 
 
-if __name__ == "__main__":
-    server = FileServer()
-    server.start()
+# --- эндпоинты ---
+@app.get("/videos")
+async def videos():
+    return JSONResponse(get_all_videos())
