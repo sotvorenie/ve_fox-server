@@ -135,8 +135,20 @@ def get_all_videos():
 
     return all_videos
 
+# получаем все видео с определенным названием
+def get_videos_by_title(name):
+    name = name.lower().strip()
+    all_videos = get_all_videos()
+
+    return [
+        video for video in all_videos
+        if name in video["name"].lower()
+    ]
+
 
 # --- эндпоинты ---
 @app.get("/videos")
-async def videos():
+async def videos(name: str | None = None):
+    if name:
+        return JSONResponse(get_videos_by_title(name))
     return JSONResponse(get_all_videos())
