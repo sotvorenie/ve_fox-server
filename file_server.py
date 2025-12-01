@@ -152,3 +152,34 @@ async def videos(name: str | None = None):
     if name:
         return JSONResponse(get_videos_by_title(name))
     return JSONResponse(get_all_videos())
+
+@app.get("/channel/{channel_name}/videos")
+async def get_channel_videos(
+    channel_name: str,
+    page: int = 1,
+    limit: int = 20,
+    name: str | None = None,
+):
+   channels = get_channels()
+   channel = next((c for c in channels if c["name"] == channel_name), None)
+
+   if not channel:
+       return JSONResponse({"error": "Channel not found"}, status_code=404)
+
+   all_videos = get_video_from_channel(channel)
+
+   if name:
+       name_lower = name.lower().strip()
+       all_videos = [v for v in all_videos if name_lower in v["name"].lower()]
+
+   total = len(all_videos)
+   start = (page - 1) * limit
+   end = start + limit
+   paginated_videos = all_videos[start:end]
+
+   return JSONResponse({
+       "total": total,
+       "page": page,
+       "limit": limit,
+       "videos": paginated_videos
+   })
