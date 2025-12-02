@@ -288,7 +288,3 @@ async def global_exception_handler(request, exc):
     return JSONResponse({"detail": "Internal Server Error"}, status_code=500)
 
 # ----------------------------------------------------
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("optimized_fastapi_video_server:app", host="0.0.0.0", port=5557, reload=True)
