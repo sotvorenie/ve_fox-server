@@ -42,6 +42,7 @@ else:
 class VideoInfo(BaseModel):
     name: str
     video: str
+    video_path: str
     preview: Optional[str]
     channel: str
     avatar: Optional[str]
@@ -113,6 +114,7 @@ def _scan_videos_in_channel(channel_name: str, channel_avatar: Optional[str]):
         videos.append({
             "name": video_folder.name,
             "video": f"{SERVER_URL}/static/{channel_name}/{video_folder.name}/{video_file}",
+            "video_path": f"{channel_name}/{video_folder.name}",
             "preview": f"{SERVER_URL}/static/{channel_name}/{video_folder.name}/{preview_file}" if preview_file else None,
             "channel": channel_name,
             "avatar": channel_avatar,
@@ -188,12 +190,30 @@ def channel_videos(channel_name: str, page: int = 1, limit: int = 20):
     end = start + limit
     paginated = videos[start:end]
 
+
     return {
         "total": total,
         "page": page,
         "limit": limit,
         "has_more": end < total,
         "videos": paginated
+    }
+
+@app.get("/channel/{channel_name}")
+def channel(channel_name: str):
+    channel = next((c for c in _cache["channels"] if c["name"] == channel_name), None)
+    if not channel:
+        raise HTTPException(status_code=404, detail="Channel not found")
+
+    channel_path = VIDEO_DIR / channel_name
+    if not channel_path.is_dir():
+        raise HTTPException(status_code=404, detail="Channel not found")
+
+    avatar = next((f for f in _safe_listdir(channel_path) if f.suffix.lower() in ALLOWED_PREVIEW_EXTS), None)
+
+    return {
+        "name": channel_name,
+        "avatar": f"{SERVER_URL}/static/{channel_name}/{avatar.name}" if avatar else None
     }
 
 @app.get("/search", response_model=ResponseData)
@@ -215,6 +235,42 @@ def search(name: str, page: int = 1, limit: int = 20):
         "has_more": end < total,
         "videos": paginated
     }
+
+@app.get("/video", response_model=VideoInfo)
+def get_video(video_path: str):
+    full_path = VIDEO_DIR / video_path
+
+    if not full_path.exists() or not full_path.is_dir():
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    files = _safe_listdir(full_path)
+
+    video_file = next((f.name for f in files if f.is_file() and f.suffix.lower() in ALLOWED_VIDEO_EXTS), None)
+
+    if not video_file:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    channel_name = full_path.parent.name
+
+    channel = next((c for c in _cache["channels"] if c["name"] == channel_name), None)
+    channel_avatar = channel["avatar"] if channel else None
+
+    try:
+        stats = (full_path / video_file).stat()
+        created_at = datetime.datetime.fromtimestamp(getattr(stats, "st_ctime", stats.st_mtime)).isoformat()
+    except Exception:
+        created_at = datetime.datetime.now().isoformat()
+
+    video_url = f"{SERVER_URL}/static/{video_path}/{video_file}"
+
+    return JSONResponse({
+        "name": full_path.name,
+        "video": video_url,
+        "preview": "",
+        "channel": channel_name,
+        "avatar": channel_avatar,
+        "date": created_at
+    })
 
 # --- ОБРАБОТКА ОШИБОК ---
 @app.exception_handler(Exception)
