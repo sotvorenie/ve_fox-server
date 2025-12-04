@@ -176,14 +176,14 @@ def all_videos(page: int = 1, limit: int = 20):
     }
 
 @app.get("/channel/{channel_name}/videos", response_model=ResponseData)
-def channel_videos(channel_name: str, page: int = 1, limit: int = 20):
+def channel_videos(channel_name: str, page: int = 1, is_new: bool = True, limit: int = 20):
     channel = next((c for c in _cache["channels"] if c["name"] == channel_name), None)
     if not channel:
         raise HTTPException(status_code=404, detail="Channel not found")
 
     videos = [v for v in _cache["videos"] if v["channel"] == channel_name]
 
-    videos.sort(key=lambda v: v["date"], reverse=True)
+    videos.sort(key=lambda v: v["date"], reverse=is_new)
 
     total = len(videos)
     start = max((page - 1) * limit, 0)
@@ -211,9 +211,16 @@ def channel(channel_name: str):
 
     avatar = next((f for f in _safe_listdir(channel_path) if f.suffix.lower() in ALLOWED_PREVIEW_EXTS), None)
 
+    try:
+        stats = channel_path.stat()
+        created_at = datetime.datetime.fromtimestamp(getattr(stats, "st_ctime", stats.st_mtime)).isoformat()
+    except Exception:
+        created_at = datetime.datetime.now().isoformat()
+
     return {
         "name": channel_name,
-        "avatar": f"{SERVER_URL}/static/{channel_name}/{avatar.name}" if avatar else None
+        "avatar": f"{SERVER_URL}/static/{channel_name}/{avatar.name}" if avatar else None,
+        "date": created_at
     }
 
 @app.get("/search", response_model=ResponseData)
