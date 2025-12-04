@@ -226,6 +226,16 @@ def channel(channel_name: str):
 @app.get("/search", response_model=ResponseData)
 def search(name: str, page: int = 1, limit: int = 20):
     q = name.lower().strip()
+
+    if not q:
+        return {
+            "total": 0,
+            "page": page,
+            "limit": limit,
+            "has_more": False,
+            "videos": []
+        }
+
     videos = [v for v in _cache["videos"] if q in v["name"].lower() or q in v["channel"].lower()]
 
     # videos.sort(key=lambda v: v["date"], reverse=True)
