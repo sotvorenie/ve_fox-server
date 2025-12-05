@@ -1,4 +1,6 @@
 import random
+import re
+from collections import defaultdict
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
@@ -8,7 +10,7 @@ from pydantic import BaseModel
 from pathlib import Path
 import datetime
 import logging
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 # --- НАСТРОЙКИ --- #
 VIDEO_DIR = Path(r"D:\veFox")
@@ -61,33 +63,58 @@ _cache = {
     "videos": [],
 }
 
-# --- ФУНКЦИИ ---
+# --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 def _safe_listdir(path: Path):
     try:
         return list(path.iterdir())
     except Exception:
         return []
 
+def normalize(s: str) -> str:
+    """Нормализация строки для сравнения."""
+    if not s:
+        return ""
+    s = s.strip().lower()
+    s = s.replace("►", " ").replace("–", " ").replace("—", " ")
+    s = re.sub(r"\s+", " ", s)
+    return s
+
+def extract_base(name: str) -> str:
+    """Берём базовое название игры/сериала до первой стрелки."""
+    name = normalize(name)
+    if " ► " in name:
+        return name.split(" ► ")[0]
+    return name
+
+def parse_series(name: str) -> Optional[Tuple[str, Optional[int], int]]:
+    """
+    Возвращает (base_name, season_or_None, episode)
+    Для большинства летсплеев и серий.
+    """
+    s = normalize(name)
+    m = re.search(r"(?:№|#|серия|часть|ep|эп)\s*\.?\s*(\d+)", s)
+    if not m:
+        return None
+    episode = int(m.group(1))
+    base = extract_base(s)
+    return base, None, episode
+
 def _scan_channels():
     channels = []
     for entry in _safe_listdir(VIDEO_DIR):
         if not entry.is_dir():
             continue
-
         subfolders = [c for c in _safe_listdir(entry) if c.is_dir()]
         if not subfolders:
             continue
-
         avatar_file = next(
             (f.name for f in _safe_listdir(entry) if f.is_file() and f.suffix.lower() in ALLOWED_PREVIEW_EXTS),
             None
         )
-
         channels.append({
             "name": entry.name,
             "avatar": f"{SERVER_URL}/static/{entry.name}/{avatar_file}" if avatar_file else None
         })
-
     return channels
 
 def _scan_videos_in_channel(channel_name: str, channel_avatar: Optional[str]):
@@ -96,21 +123,16 @@ def _scan_videos_in_channel(channel_name: str, channel_avatar: Optional[str]):
     for video_folder in _safe_listdir(channel_path):
         if not video_folder.is_dir():
             continue
-
         files = _safe_listdir(video_folder)
-
         video_file = next((f.name for f in files if f.is_file() and f.suffix.lower() in ALLOWED_VIDEO_EXTS), None)
         preview_file = next((f.name for f in files if f.is_file() and f.suffix.lower() in ALLOWED_PREVIEW_EXTS), None)
-
         if not video_file:
             continue
-
         try:
             stats = (video_folder / video_file).stat()
             created_at = datetime.datetime.fromtimestamp(getattr(stats, "st_ctime", stats.st_mtime)).isoformat()
         except Exception:
             created_at = datetime.datetime.now().isoformat()
-
         videos.append({
             "name": video_folder.name,
             "video": f"{SERVER_URL}/static/{channel_name}/{video_folder.name}/{video_file}",
@@ -120,7 +142,6 @@ def _scan_videos_in_channel(channel_name: str, channel_avatar: Optional[str]):
             "avatar": channel_avatar,
             "date": created_at
         })
-
     videos.sort(key=lambda v: v["date"], reverse=True)
     return videos
 
@@ -158,99 +179,16 @@ def get_channels():
 @app.get("/all_videos", response_model=ResponseData)
 def all_videos(page: int = 1, limit: int = 20):
     videos = _cache["videos"].copy()
-
     random.shuffle(videos)
-
     total = len(videos)
-
     start = max((page - 1) * limit, 0)
     end = start + limit
-    paginated = videos[start:end]
-
     return {
         "total": total,
         "page": page,
         "limit": limit,
         "has_more": end < total,
-        "videos": paginated
-    }
-
-@app.get("/channel/{channel_name}/videos", response_model=ResponseData)
-def channel_videos(channel_name: str, page: int = 1, is_new: bool = True, limit: int = 20):
-    channel = next((c for c in _cache["channels"] if c["name"] == channel_name), None)
-    if not channel:
-        raise HTTPException(status_code=404, detail="Channel not found")
-
-    videos = [v for v in _cache["videos"] if v["channel"] == channel_name]
-
-    videos.sort(key=lambda v: v["date"], reverse=is_new)
-
-    total = len(videos)
-    start = max((page - 1) * limit, 0)
-    end = start + limit
-    paginated = videos[start:end]
-
-
-    return {
-        "total": total,
-        "page": page,
-        "limit": limit,
-        "has_more": end < total,
-        "videos": paginated
-    }
-
-@app.get("/channel/{channel_name}")
-def channel(channel_name: str):
-    channel = next((c for c in _cache["channels"] if c["name"] == channel_name), None)
-    if not channel:
-        raise HTTPException(status_code=404, detail="Channel not found")
-
-    channel_path = VIDEO_DIR / channel_name
-    if not channel_path.is_dir():
-        raise HTTPException(status_code=404, detail="Channel not found")
-
-    avatar = next((f for f in _safe_listdir(channel_path) if f.suffix.lower() in ALLOWED_PREVIEW_EXTS), None)
-
-    try:
-        stats = channel_path.stat()
-        created_at = datetime.datetime.fromtimestamp(getattr(stats, "st_ctime", stats.st_mtime)).isoformat()
-    except Exception:
-        created_at = datetime.datetime.now().isoformat()
-
-    return {
-        "name": channel_name,
-        "avatar": f"{SERVER_URL}/static/{channel_name}/{avatar.name}" if avatar else None,
-        "date": created_at
-    }
-
-@app.get("/search", response_model=ResponseData)
-def search(name: str, page: int = 1, limit: int = 20):
-    q = name.lower().strip()
-
-    if not q:
-        return {
-            "total": 0,
-            "page": page,
-            "limit": limit,
-            "has_more": False,
-            "videos": []
-        }
-
-    videos = [v for v in _cache["videos"] if q in v["name"].lower() or q in v["channel"].lower()]
-
-    # videos.sort(key=lambda v: v["date"], reverse=True)
-
-    total = len(videos)
-    start = max((page - 1) * limit, 0)
-    end = start + limit
-    paginated = videos[start:end]
-
-    return {
-        "total": total,
-        "page": page,
-        "limit": limit,
-        "has_more": end < total,
-        "videos": paginated
+        "videos": videos[start:end]
     }
 
 @app.get("/video", response_model=VideoInfo)
@@ -268,7 +206,6 @@ def get_video(video_path: str):
         raise HTTPException(status_code=404, detail="Video not found")
 
     channel_name = full_path.parent.name
-
     channel = next((c for c in _cache["channels"] if c["name"] == channel_name), None)
     channel_avatar = channel["avatar"] if channel else None
 
@@ -288,6 +225,82 @@ def get_video(video_path: str):
         "avatar": channel_avatar,
         "date": created_at
     })
+
+@app.get("/channel/{channel_name}/videos", response_model=ResponseData)
+def channel_videos(channel_name: str, page: int = 1, is_new: bool = True, limit: int = 20):
+    channel = next((c for c in _cache["channels"] if c["name"] == channel_name), None)
+    if not channel:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    videos = [v for v in _cache["videos"] if normalize(v["channel"]) == normalize(channel_name)]
+    videos.sort(key=lambda v: v["date"], reverse=is_new)
+    total = len(videos)
+    start = max((page - 1) * limit, 0)
+    end = start + limit
+    return {
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "has_more": end < total,
+        "videos": videos[start:end]
+    }
+
+@app.get("/search", response_model=ResponseData)
+def search(name: str, page: int = 1, limit: int = 20):
+    q = normalize(name)
+    if not q:
+        return {"total": 0, "page": page, "limit": limit, "has_more": False, "videos": []}
+    videos = [v for v in _cache["videos"] if q in normalize(v["name"]) or q in normalize(v["channel"])]
+    total = len(videos)
+    start = max((page - 1) * limit, 0)
+    end = start + limit
+    return {"total": total, "page": page, "limit": limit, "has_more": end < total, "videos": videos[start:end]}
+
+@app.get("/recommended", response_model=ResponseData)
+def get_recommendations(name: str, channel_name: str, page: int = 1, limit: int = 20):
+    videos = _cache["videos"]
+    weights = defaultdict(int)
+
+    parsed = parse_series(name)
+    if parsed:
+        base, _, episode = parsed
+        for v in videos:
+            p = parse_series(v["name"])
+            if not p:
+                continue
+            v_base, _, v_episode = p
+            if v_base == base:
+                if episode is not None:
+                    if v_episode == episode + 1:
+                        weights[v["video_path"]] += 1000
+                    elif v_episode == episode + 2:
+                        weights[v["video_path"]] += 800
+
+    # Видео с того же канала
+    if channel_name:
+        for v in videos:
+            if normalize(v["channel"]) == normalize(channel_name):
+                weights[v["video_path"]] += 500
+
+    # Похожие по словам
+    query_words = set(normalize(name).split())
+    for v in videos:
+        for w in query_words:
+            if w in normalize(v["name"]):
+                weights[v["video_path"]] += 10
+
+    # Рандомный вес
+    for v in videos:
+        weights[v["video_path"]] += random.randint(0, 5)
+
+    # Сортировка
+    sorted_videos = sorted(videos, key=lambda v: weights[v["video_path"]], reverse=True)
+
+    # Пагинация
+    total = len(sorted_videos)
+    start = max((page - 1) * limit, 0)
+    end = start + limit
+
+    return {"total": total, "page": page, "limit": limit, "has_more": end < total, "videos": sorted_videos[start:end]}
 
 # --- ОБРАБОТКА ОШИБОК ---
 @app.exception_handler(Exception)
