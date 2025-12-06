@@ -88,15 +88,44 @@ def extract_base(name: str) -> str:
 
 def parse_series(name: str) -> Optional[Tuple[str, Optional[int], int]]:
     """
-    Возвращает (base_name, season_or_None, episode)
-    Для большинства летсплеев и серий.
+    Возвращает (base_name, season, episode)
+    Теперь супер-надёжный парсер.
     """
     s = normalize(name)
-    m = re.search(r"(?:№|#|серия|часть|ep|эп)\s*\.?\s*(\d+)", s)
-    if not m:
+
+    # 1) Ищем стандартные эпизодные маркеры
+    patterns = [
+        r'(?:№|#)\s*(\d+)',              # №3, #4
+        r'(?:серия|эпизод|эп|часть|ч)\s*\.?\s*(\d+)',   # серия 3, эп 2, часть 4
+        r'(?:episode|ep)\s*\.?\s*(\d+)',               # episode 3, ep 2
+        r'(?:выпуск)\s*(\d+)',                         # выпуск 5
+    ]
+
+    episode = None
+    for p in patterns:
+        m = re.search(p, s, re.IGNORECASE)
+        if m:
+            episode = int(m.group(1))
+            break
+
+    # 2) Если не нашли — ищем одиночные числа вида " ► 3" или " 3 "
+    if episode is None:
+        m = re.search(r'[^\d](\d{1,3})[^\d]', s)
+        if m:
+            # Проверка, чтобы не брать год, типо 2021
+            num = int(m.group(1))
+            if 1 <= num <= 999:
+                episode = num
+
+    if episode is None:
         return None
-    episode = int(m.group(1))
-    base = extract_base(s)
+
+    # Определяем base_name как текст ДО последнего "►"
+    if "►" in name:
+        base = name.split("►")[0].strip().lower()
+    else:
+        base = name.strip().lower()
+
     return base, None, episode
 
 def _scan_channels():
@@ -249,58 +278,162 @@ def search(name: str, page: int = 1, limit: int = 20):
     q = normalize(name)
     if not q:
         return {"total": 0, "page": page, "limit": limit, "has_more": False, "videos": []}
-    videos = [v for v in _cache["videos"] if q in normalize(v["name"]) or q in normalize(v["channel"])]
+
+    query_words = q.split()
+
+    results = []
+
+    for v in _cache["videos"]:
+        title = normalize(v["name"])
+        channel = normalize(v["channel"])
+
+        # Если хотя бы одно слово запроса встречается в названии или канале
+        match_score = 0
+
+        for word in query_words:
+            if len(word) < 2:
+                continue
+
+            # Прямое совпадение слова
+            if word in title or word in channel:
+                match_score += 2
+                continue
+
+            # Совпадение по отдельным токенам (например dying + light)
+            for part in title.split():
+                if part.startswith(word):
+                    match_score += 1
+
+        # Парсинг серии — чтобы "2" находило "№2"
+        parsed = parse_series(v["name"])
+        if parsed:
+            _, _, ep = parsed
+            if str(ep) in query_words:
+                match_score += 3  # серия совпала → очень важно
+
+        if match_score > 0:
+            results.append((match_score, v))
+
+    # Сортировка по релевантности
+    results.sort(key=lambda x: x[0], reverse=True)
+    videos = [v for _, v in results]
+
     total = len(videos)
-    start = max((page - 1) * limit, 0)
+    start = (page - 1) * limit
     end = start + limit
-    return {"total": total, "page": page, "limit": limit, "has_more": end < total, "videos": videos[start:end]}
+
+    return {
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "has_more": end < total,
+        "videos": videos[start:end]
+    }
 
 @app.get("/recommended", response_model=ResponseData)
 def get_recommendations(name: str, channel_name: str, page: int = 1, limit: int = 20):
     videos = _cache["videos"]
-    weights = defaultdict(int)
+    weights = {}
 
+    # ---------------------------------------------------------
+    # 1. Парсинг текущего видео: base_name + episode_number
+    # ---------------------------------------------------------
     parsed = parse_series(name)
+
+    base = None
+    episode = None
+
     if parsed:
         base, _, episode = parsed
-        for v in videos:
-            p = parse_series(v["name"])
-            if not p:
-                continue
-            v_base, _, v_episode = p
+
+    # Для сортировки строго эпизоды идут в правильном порядке
+    next_ep_candidates = []
+    same_channel_candidates = []
+    similar_candidates = []
+    random_candidates = []
+
+    normalized_name = normalize(name)
+    normalized_channel = normalize(channel_name)
+
+    query_words = set(normalized_name.split())
+
+    # ---------------------------------------------------------
+    # Сканируем все видео
+    # ---------------------------------------------------------
+    for v in videos:
+        v_name_norm = normalize(v["name"])
+        v_channel_norm = normalize(v["channel"])
+
+        if v_name_norm == normalized_name and v_channel_norm == normalized_channel:
+            continue  # пропустить текущее видео
+
+        v_parsed = parse_series(v["name"])
+
+        # ----- 1. Следующие эпизоды -----
+        if parsed and v_parsed:
+            v_base, _, v_episode = v_parsed
+
             if v_base == base:
-                if episode is not None:
-                    if v_episode == episode + 1:
-                        weights[v["video_path"]] += 1000
-                    elif v_episode == episode + 2:
-                        weights[v["video_path"]] += 800
+                if v_episode == episode + 1:
+                    next_ep_candidates.append((1, v))
+                    continue
+                if v_episode == episode + 2:
+                    next_ep_candidates.append((2, v))
+                    continue
 
-    # Видео с того же канала
-    if channel_name:
-        for v in videos:
-            if normalize(v["channel"]) == normalize(channel_name):
-                weights[v["video_path"]] += 500
+        # ----- 2. Видео с того же канала -----
+        if v_channel_norm == normalized_channel:
+            same_channel_candidates.append(v)
+            continue
 
-    # Похожие по словам
-    query_words = set(normalize(name).split())
-    for v in videos:
+        # ----- 3. Похожие по названию -----
+        common = 0
         for w in query_words:
-            if w in normalize(v["name"]):
-                weights[v["video_path"]] += 10
+            if len(w) > 2 and w in v_name_norm:
+                common += 1
 
-    # Рандомный вес
-    for v in videos:
-        weights[v["video_path"]] += random.randint(0, 5)
+        if common > 0:
+            similar_candidates.append((common, v))
+            continue
 
-    # Сортировка
-    sorted_videos = sorted(videos, key=lambda v: weights[v["video_path"]], reverse=True)
+        # ----- 4. Рандомный хвост -----
+        random_candidates.append(v)
 
+    # ---------------------------------------------------------
+    # Формируем итоговый список
+    # ---------------------------------------------------------
+    final_list = []
+
+    # 1) Строго упорядочить эпизоды: сначала N+1, потом N+2
+    next_ep_sorted = sorted(next_ep_candidates, key=lambda x: x[0])
+    final_list.extend([v for _, v in next_ep_sorted])
+
+    # 2) Взять 3–5 видео с того же канала
+    same_channel_sorted = same_channel_candidates[:5]
+    final_list.extend(same_channel_sorted)
+
+    # 3) Похожие по названию: сортировать по убыванию совпадений
+    similar_sorted = sorted(similar_candidates, key=lambda x: x[0], reverse=True)
+    final_list.extend([v for _, v in similar_sorted])
+
+    # 4) Хвостовое рандомное перемешивание
+    random.shuffle(random_candidates)
+    final_list.extend(random_candidates)
+
+    # ---------------------------------------------------------
     # Пагинация
-    total = len(sorted_videos)
-    start = max((page - 1) * limit, 0)
+    # ---------------------------------------------------------
+    total = len(final_list)
+    start = (page - 1) * limit
     end = start + limit
 
-    return {"total": total, "page": page, "limit": limit, "has_more": end < total, "videos": sorted_videos[start:end]}
+    return {
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "has_more": end < total,
+        "videos": final_list[start:end]
+    }
 
 # --- ОБРАБОТКА ОШИБОК ---
 @app.exception_handler(Exception)
