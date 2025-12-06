@@ -273,6 +273,32 @@ def channel_videos(channel_name: str, page: int = 1, is_new: bool = True, limit:
         "videos": videos[start:end]
     }
 
+@app.get("/channel/{channel_name}")
+def channel(channel_name: str):
+    channel = next((c for c in _cache["channels"] if c["name"] == channel_name), None)
+
+    if not channel:
+        raise HTTPException(status_code=404, detail="Channel not found")
+
+    channel_path = VIDEO_DIR / channel_name
+
+    if not channel_path.is_dir():
+        raise HTTPException(status_code=404, detail="Channel not found")
+
+    avatar = next((f for f in _safe_listdir(channel_path) if f.suffix.lower() in ALLOWED_PREVIEW_EXTS), None)
+
+    try:
+        stats = channel_path.stat()
+        created_at = datetime.datetime.fromtimestamp(getattr(stats, "st_ctime", stats.st_mtime)).isoformat()
+    except Exception:
+        created_at = datetime.datetime.now().isoformat()
+
+    return {
+        "name": channel_name,
+        "avatar": f"{SERVER_URL}/static/{channel_name}/{avatar.name}" if avatar else None,
+        "date": created_at
+    }
+
 @app.get("/search", response_model=ResponseData)
 def search(name: str, page: int = 1, limit: int = 20):
     q = normalize(name)
