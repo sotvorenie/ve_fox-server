@@ -1,3 +1,4 @@
+import math
 import random
 import re
 from collections import defaultdict
@@ -12,6 +13,7 @@ import datetime
 import logging
 from typing import List, Optional, Tuple
 import shutil
+from moviepy.video.io.VideoFileClip import VideoFileClip
 
 # --- НАСТРОЙКИ --- #
 VIDEO_DIR = Path(r"D:\veFox")
@@ -29,7 +31,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
     max_age=600,
@@ -46,6 +48,7 @@ class VideoInfo(BaseModel):
     name: str
     video: str
     video_path: str
+    duration: Optional[int]
     preview: Optional[str]
     channel: str
     avatar: Optional[str]
@@ -164,15 +167,26 @@ def _scan_videos_in_channel(channel_name: str, channel_avatar: Optional[str]):
         preview_file = next((f.name for f in files if f.is_file() and f.suffix.lower() in ALLOWED_PREVIEW_EXTS), None)
         if not video_file:
             continue
+
         try:
             stats = (video_folder / video_file).stat()
             created_at = datetime.datetime.fromtimestamp(getattr(stats, "st_ctime", stats.st_mtime)).isoformat()
         except Exception:
             created_at = datetime.datetime.now().isoformat()
+
+        duration = None
+        try:
+            clip = VideoFileClip(str(video_folder / video_file))
+            duration = math.ceil(clip.duration)
+            clip.close()
+        except Exception as e:
+            print(f"Не удалось получить длительность видео {video_file}: {e}")
+
         videos.append({
             "name": video_folder.name,
             "video": f"{SERVER_URL}/static/{channel_name}/{video_folder.name}/{video_file}",
             "video_path": f"{channel_name}/{video_folder.name}",
+            "duration": duration,
             "preview": f"{SERVER_URL}/static/{channel_name}/{video_folder.name}/{preview_file}" if preview_file else None,
             "channel": channel_name,
             "avatar": channel_avatar,
@@ -214,6 +228,7 @@ def get_channels():
 
 @app.get("/all_videos", response_model=ResponseData)
 def all_videos(page: int = 1, limit: int = 20):
+    print(">>> all_videos CALLED")
     videos = _cache["videos"].copy()
     random.shuffle(videos)
     total = len(videos)
@@ -252,6 +267,14 @@ def get_video(video_path: str):
     except Exception:
         created_at = datetime.datetime.now().isoformat()
 
+    duration = None
+    try:
+        clip = VideoFileClip(str(full_path / video_file))
+        duration = math.ceil(clip.duration)
+        clip.close()
+    except Exception as e:
+        print(f"Не удалось получить длительность видео {video_file}: {e}")
+
     video_url = f"{SERVER_URL}/static/{video_path}/{video_file}"
     preview_url = f"{SERVER_URL}/static/{video_path}/{preview_file}"
 
@@ -259,6 +282,7 @@ def get_video(video_path: str):
         "name": full_path.name,
         "video": video_url,
         "video_path": video_path,
+        "duration": duration,
         "preview": preview_url,
         "channel": channel_name,
         "avatar": channel_avatar,
