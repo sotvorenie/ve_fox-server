@@ -230,6 +230,7 @@ def get_video(video_path: str):
     files = _safe_listdir(full_path)
 
     video_file = next((f.name for f in files if f.is_file() and f.suffix.lower() in ALLOWED_VIDEO_EXTS), None)
+    preview_file = next((f.name for f in files if f.is_file() and f.suffix.lower() in ALLOWED_PREVIEW_EXTS), None)
 
     if not video_file:
         raise HTTPException(status_code=404, detail="Video not found")
@@ -245,11 +246,13 @@ def get_video(video_path: str):
         created_at = datetime.datetime.now().isoformat()
 
     video_url = f"{SERVER_URL}/static/{video_path}/{video_file}"
+    preview_url = f"{SERVER_URL}/static/{video_path}/{preview_file}"
 
     return JSONResponse({
         "name": full_path.name,
         "video": video_url,
-        "preview": "",
+        "video_path": video_path,
+        "preview": preview_url,
         "channel": channel_name,
         "avatar": channel_avatar,
         "date": created_at
