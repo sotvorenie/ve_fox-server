@@ -11,6 +11,7 @@ from pathlib import Path
 import datetime
 import logging
 from typing import List, Optional, Tuple
+import shutil
 
 # --- НАСТРОЙКИ --- #
 VIDEO_DIR = Path(r"D:\veFox")
@@ -56,6 +57,12 @@ class ResponseData(BaseModel):
     limit: int
     has_more: bool
     videos: List[VideoInfo]
+
+class UploadVideo(BaseModel):
+    title: str
+    channel: str
+    video_path: str
+    preview_path: Optional[str] = None
 
 # --- КЭШ ---
 _cache = {
@@ -462,6 +469,51 @@ def get_recommendations(name: str, channel_name: str, page: int = 1, limit: int 
         "limit": limit,
         "has_more": end < total,
         "videos": final_list[start:end]
+    }
+
+@app.post("/upload_video")
+def upload_video(data: UploadVideo):
+    channel_path = VIDEO_DIR / data.channel
+    if not channel_path.exists():
+        raise HTTPException(404, "Канал не найден..")
+
+    src_video = Path(data.video_path)
+    if not src_video.exists() or not src_video.is_file():
+        raise HTTPException(400, "Видео не найдено..")
+
+    video_ext = src_video.suffix.lower()
+    if video_ext not in ALLOWED_VIDEO_EXTS:
+        raise HTTPException(400, "Некорректный формат видео..")
+
+    title = (
+        data.title
+        .replace(" || ", " !! ")
+        .replace(" | ", " ! ")
+        .replace("#", "№")
+    )
+    safe_title = re.sub(r'[\\/:*?"<>]+', "", title)
+    safe_title = re.sub(r"\s+", " ", safe_title).strip()
+    video_title = channel_path / safe_title
+
+    if video_title.exists():
+        raise HTTPException(400, "Такое видео уже есть..")
+
+    video_title.mkdir(parents=True)
+
+    shutil.copy2(src_video, video_title / f"видео{video_ext}")
+
+    if data.preview_path:
+        src_preview = Path(data.preview_path)
+        if src_preview.exists():
+            preview_ext = src_preview.suffix.lower()
+            if preview_ext in ALLOWED_PREVIEW_EXTS:
+                shutil.copy2(src_preview, video_title / f"превью{preview_ext}")
+
+    build_cache()
+
+    return {
+        "status": "ok",
+        "path": f"{data.channel}/{safe_title}"
     }
 
 # --- ОБРАБОТКА ОШИБОК ---
