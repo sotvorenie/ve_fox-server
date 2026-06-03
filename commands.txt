@@ -1,0 +1,6 @@
+команда запуска проекта
+uvicorn file_server:app --host 0.0.0.0 --port 5557 --reload
+
+
+очистка бд
+docker exec -it vefox_db psql -U vefox_user -d vefox_database -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
