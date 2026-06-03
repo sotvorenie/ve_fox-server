@@ -1,5 +1,5 @@
 команда запуска проекта
-uvicorn file_server:app --host 0.0.0.0 --port 5557 --reload
+uvicorn main:app --host 0.0.0.0 --port 5557 --reload
 
 
 очистка бд
