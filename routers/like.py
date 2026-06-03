@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import delete, update, and_, select, exists
 
-from models import LikeResponse, IsLikedResponse, VideosListResponse
+from models import LikeResponse, VideosListResponse
 from database_models import User, Video, Like
 from auth import get_user
 from database import get_db
@@ -35,17 +35,18 @@ def like(video_id: int, current_user: User = Depends(get_user), db: Session = De
         is_liked = False
 
     return {
-        "success": True,
-        "liked": is_liked
+        "is_liked": is_liked
     }
 
 
-@router.get("/is_liked/{video_id}", response_model=IsLikedResponse)
+@router.get("/is_liked/{video_id}", response_model=LikeResponse)
 @db_transaction
 def is_like(video_id: int, current_user: User = Depends(get_user), db: Session = Depends(get_db)):
     is_liked = db.scalar(select(exists().where(and_(Like.video_id == video_id, Like.user_id == current_user.id))))
 
-    return {"is_liked": is_liked}
+    return {
+        "is_liked": is_liked
+    }
 
 
 @router.get("/all", response_model=VideosListResponse)

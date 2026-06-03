@@ -101,11 +101,6 @@ class SearchResponse(BasePagination):
 
 
 class LikeResponse(ORMModel):
-    success: bool
-    is_liked: bool
-
-
-class IsLikedResponse(ORMModel):
     is_liked: bool
 
 
