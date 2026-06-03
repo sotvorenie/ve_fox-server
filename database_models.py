@@ -60,7 +60,7 @@ class ChannelSection(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    channel_id: Mapped[int] = mapped_column(ForeignKey('channels.id'), ondelete='CASCADE')
+    channel_id: Mapped[int] = mapped_column(ForeignKey('channels.id', ondelete='CASCADE'))
 
     channel: Mapped[Channel] = relationship(back_populates='sections')
     videos: Mapped[list["Video"]] = relationship(back_populates='section')

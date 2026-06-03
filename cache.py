@@ -199,7 +199,6 @@ class DateSynchronizer:
 
         for video in _safe_listdir(channel_path):
             if not video.is_dir():
-                logger.warning(f"Видео {video.name} не является папкой..")
                 continue
 
             video_file = get_video_file(video)
@@ -352,24 +351,20 @@ class DateSynchronizer:
 
     def sync(self):
         self.load_existing()
-
-        with self.db.begin():
-            self.sync_channels()
-            self.sync_films()
-            self.delete_unused_from_db()
+        self.sync_channels()
+        self.sync_films()
+        self.delete_unused_from_db()
 
 
 # проходимся по всем видео/фильмам и записываем их данные в бд
 def start_db():
-    db = SessionLocal()
-
     try:
-        logger.info("Начало синхронизации..")
-        synchronizer = DateSynchronizer(db)
-        synchronizer.sync()
-        logger.info("Синхронизация данных прошла успешно!!")
+        with SessionLocal() as db:
+            logger.info("Начало синхронизации..")
+            with db.begin():
+                synchronizer = DateSynchronizer(db)
+                synchronizer.sync()
+            logger.info("Синхронизация данных прошла успешно!!")
+
     except Exception as e:
-        logger.critical("Ошибка синхронизации данных: ", e)
-        db.rollback()
-    finally:
-        db.close()
+        logger.critical(f"Ошибка при наполнении БД видео: {e}")

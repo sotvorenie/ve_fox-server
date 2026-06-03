@@ -9,12 +9,12 @@ from sqlalchemy import select
 from database import get_db
 from database_models import User
 from httpExceptions import jwt_exception, db_exception
+from env import SECRET_KEY
 
 from logger import get_logger
 logger = get_logger(__name__)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__ident="2b")
-SECRET_KEY = "v1e2f3o4x10rand10"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth")
 
 
