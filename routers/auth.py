@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
-from models import UserRegister, MeResponse
+from models import UserRegister, MeResponse, UserLogin
 from database import get_db
 from auth import pwd_context, create_jwt_token, get_user
 from database_models import User
@@ -41,13 +41,13 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=MeResponse)
 @db_transaction
-def auth(user_data: UserRegister, db: Session = Depends(get_db)):
+def auth(user_data: UserLogin, db: Session = Depends(get_db)):
     user = db.execute(select(User).where(User.login == user_data.login)).scalar_one_or_none()
 
     if not user or not pwd_context.verify(user_data.password, user.password):
         raise auth_exception
 
-    logger.info(f"Пользователь {user_data.name} авторизовался в приложении")
+    logger.info(f"Пользователь {user.name} авторизовался в приложении")
 
     new_token = create_jwt_token(user.id)
 

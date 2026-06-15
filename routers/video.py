@@ -114,7 +114,7 @@ def get_recommendations(
         similar_videos = db.scalars(select(Video)
                                     .where(and_(
                                         Video.id.notin_(used_id),
-                                        Video.tags.op('?|')(video.tags)))
+                                        Video.tags.overlap(video.tags)))
                                     .options(joinedload(Video.channel))
                                     .limit(5)
                                     ).all()

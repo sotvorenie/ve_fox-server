@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel
 from typing import Optional
 
@@ -20,6 +21,11 @@ class UserRegister(BaseModel):
     name: str
 
 
+class UserLogin(BaseModel):
+    login: str
+    password: str
+
+
 class UserResponse(ORMModel):
     id: int
     name: str
@@ -39,7 +45,7 @@ class Token(BaseModel):
 class ChannelResponse(ORMModel):
     id: int
     name: str
-    date: str
+    date: datetime
     avatar_url: Optional[str] = None
 
 
@@ -58,7 +64,7 @@ class SectionResponse(ORMModel):
 class VideoForListResponse(ORMModel):
     id: int
     name: str
-    date: str
+    date: datetime
     duration: float
     views: int
     video_url: str
@@ -70,7 +76,7 @@ class VideoResponse(ORMModel):
     id: int
     name: str
     video_url: str
-    date: str
+    date: datetime
     duration: float
     views: int
     likes: int

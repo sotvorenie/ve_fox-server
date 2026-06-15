@@ -24,7 +24,7 @@ def search(value: str, page: int = 1, limit: int = 21, db: Session = Depends(get
 
     filters = []
     if tags:
-        filters.append(Video.tags.op('?|')(tags))
+        filters.append(Video.tags.overlap(tags))
     if channels_id:
         filters.append(Channel.id.in_(channels_id))
     if not filters:

@@ -24,7 +24,7 @@ def _safe_listdir(path: Path):
     try:
         return list(path.iterdir())
     except Exception as e:
-        logger.error(f"Ошибка: файл в {path} не найден. Сообщение ошибки: ", e)
+        logger.error(f"Ошибка: файл в {path} не найден. Сообщение ошибки: {e}")
         return []
 
 

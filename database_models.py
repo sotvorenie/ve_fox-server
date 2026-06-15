@@ -1,10 +1,11 @@
 from sqlalchemy import (Column, Integer, String,
                         ForeignKey, DateTime, Table,
-                        UniqueConstraint)
+                        UniqueConstraint, Index, text)
 from sqlalchemy.orm import relationship, Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy import func
 from datetime import datetime
+from typing import Optional, List
 
 from database import Base
 
@@ -16,7 +17,7 @@ class User(Base):
     name: Mapped[str] = mapped_column(String(20))
     login: Mapped[str] = mapped_column(String(20), unique=True)
     password: Mapped[str] = mapped_column(String(255))
-    avatar_url: Mapped[str | None] = mapped_column(nullable=True)
+    avatar_url: Mapped[Optional[str]] = mapped_column(nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),
@@ -25,10 +26,10 @@ class User(Base):
                                                  onupdate=func.now()
                                                  )
 
-    likes: Mapped[list["Like"]] = relationship(back_populates='user', cascade='all, delete-orphan')
-    history: Mapped[list["History"]] = relationship(back_populates='user', cascade='all, delete-orphan')
-    saved_times: Mapped[list["SavedTime"]] = relationship(back_populates='user', cascade='all, delete-orphan')
-    watch_later: Mapped[list["WatchLater"]] = relationship(back_populates='user', cascade='all, delete-orphan')
+    likes: Mapped[List["Like"]] = relationship(back_populates='user', cascade='all, delete-orphan')
+    history: Mapped[List["History"]] = relationship(back_populates='user', cascade='all, delete-orphan')
+    saved_times: Mapped[List["SavedTime"]] = relationship(back_populates='user', cascade='all, delete-orphan')
+    watch_later: Mapped[List["WatchLater"]] = relationship(back_populates='user', cascade='all, delete-orphan')
 
 
 class Channel(Base):
@@ -37,8 +38,8 @@ class Channel(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     path: Mapped[str] = mapped_column(String, unique=True)
     name: Mapped[str] = mapped_column()
-    avatar_url: Mapped[str | None] = mapped_column(nullable=True)
-    tags: Mapped[list[str]] = mapped_column(JSONB)
+    avatar_url: Mapped[Optional[str]] = mapped_column(nullable=True)
+    tags: Mapped[List[str]] = mapped_column(ARRAY(String), server_default=text("'{}'"), nullable=False)
     date: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -48,8 +49,8 @@ class Channel(Base):
                                                  onupdate=func.now()
                                                  )
 
-    videos: Mapped[list["Video"]] = relationship(back_populates='channel', cascade='all, delete-orphan')
-    sections: Mapped[list["ChannelSection"]] = relationship(back_populates='channel', cascade='all, delete-orphan')
+    videos: Mapped[List["Video"]] = relationship(back_populates='channel', cascade='all, delete-orphan')
+    sections: Mapped[List["ChannelSection"]] = relationship(back_populates='channel', cascade='all, delete-orphan')
 
 
 class ChannelSection(Base):
@@ -63,11 +64,14 @@ class ChannelSection(Base):
     channel_id: Mapped[int] = mapped_column(ForeignKey('channels.id', ondelete='CASCADE'))
 
     channel: Mapped[Channel] = relationship(back_populates='sections')
-    videos: Mapped[list["Video"]] = relationship(back_populates='section')
+    videos: Mapped[List["Video"]] = relationship(back_populates='section')
 
 
 class Video(Base):
     __tablename__ = 'videos'
+    __table_args__ = (
+        Index('idx_video_tags', 'tags', postgresql_using='gin'),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     path: Mapped[str] = mapped_column(String, unique=True)
@@ -75,11 +79,11 @@ class Video(Base):
     video_url: Mapped[str] = mapped_column()
     date: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     duration: Mapped[int] = mapped_column()
-    tags: Mapped[dict] = mapped_column(JSONB)
+    tags: Mapped[List[str]] = mapped_column(ARRAY(String), server_default=text("'{}'"), nullable=False)
     views: Mapped[int] = mapped_column(default=0, server_default='0', nullable=False)
     likes: Mapped[int] = mapped_column(default=0, server_default='0', nullable=False)
-    preview_url: Mapped[str | None] = mapped_column(nullable=True)
-    subtitle_url: Mapped[str | None] = mapped_column(nullable=True)
+    preview_url: Mapped[Optional[str]] = mapped_column(nullable=True)
+    subtitle_url: Mapped[Optional[str]] = mapped_column(nullable=True)
     section_index: Mapped[int] = mapped_column(default=1)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -90,7 +94,7 @@ class Video(Base):
                                                  )
 
     channel_id: Mapped[int] = mapped_column(ForeignKey('channels.id', ondelete='CASCADE'), index=True)
-    section_id: Mapped[int | None] = mapped_column(ForeignKey('channel_sections.id', ondelete='SET NULL'),
+    section_id: Mapped[Optional[str]] = mapped_column(ForeignKey('channel_sections.id', ondelete='SET NULL'),
                                                    nullable=True
                                                    )
 
@@ -114,7 +118,7 @@ class Film(Base):
     name: Mapped[str] = mapped_column()
     video_url: Mapped[str] = mapped_column()
     duration: Mapped[int] = mapped_column()
-    preview_url: Mapped[str | None] = mapped_column(nullable=True)
+    preview_url: Mapped[Optional[str]] = mapped_column(nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),
@@ -126,7 +130,7 @@ class Film(Base):
     genre_id: Mapped[int] = mapped_column(ForeignKey('film_genres.id', ondelete='RESTRICT'))
 
     genre: Mapped["FilmGenre"] = relationship(back_populates='films')
-    actors: Mapped[list["FilmActor"]] = relationship(secondary=film_actor_association, back_populates='films')
+    actors: Mapped[List["FilmActor"]] = relationship(secondary=film_actor_association, back_populates='films')
 
 
 class FilmGenre(Base):
@@ -148,7 +152,7 @@ class FilmActor(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    films: Mapped[list["Film"]] = relationship(secondary=film_actor_association, back_populates='actors')
+    films: Mapped[List["Film"]] = relationship(secondary=film_actor_association, back_populates='actors')
 
 
 class Like(Base):

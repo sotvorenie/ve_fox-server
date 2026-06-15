@@ -144,8 +144,8 @@ class DateSynchronizer:
                 self.db.delete(existing_obj[video_path_str])
                 del existing_obj[video_path_str]
             logger.warning(f"У видеоматериала {Path(video_path_str).name} duration = 0")
-            return False
-        return True
+            return True
+        return False
 
     def sync_channels(self):
         for channel_dir in _safe_listdir(self.video_directory):
