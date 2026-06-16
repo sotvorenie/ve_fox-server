@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from cache import start_db
 from database import get_db, SessionLocal, Base, engine
 from database_models import Channel, Video
-from routers import auth, channel, history, like, save_time, search, video, watch_later
+from routers import auth, channel, history, like, save_time, search, video, watch_later, user
 from logger import setup_logger, get_logger
 from httpExceptions import db_exception
 
@@ -45,6 +45,7 @@ app.include_router(save_time.router)
 app.include_router(search.router)
 app.include_router(video.router)
 app.include_router(watch_later.router)
+app.include_router(user.router)
 
 
 # if VIDEO_DIRECTORY.exists() and VIDEO_DIRECTORY.is_dir():

@@ -238,6 +238,21 @@ def db_transaction(function):
     return wrapper
 
 
+# получаем путь файла
+def get_file_path(url: str):
+    if not url:
+        return None
+    relative_path = Path(url.replace("static/", "", 1))
+    return VIDEO_DIRECTORY / relative_path
+
+
+# получаем url файла
+def get_file_url(path: Path):
+    if not path:
+        return None
+    return f"static/{path.relative_to(VIDEO_DIRECTORY).as_posix()}"
+
+
 # получаем total и список видео с таблицы: для watch_later, like, history
 def get_total_and_videos_from_db(model, user_id, page, limit, db):
     skip = get_offset(page, limit)

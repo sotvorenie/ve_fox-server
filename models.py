@@ -125,3 +125,12 @@ class IsWatchLaterResponse(ORMModel):
 
 class FilmsListResponse(BasePagination):
     films: list[FilmForListResponse]
+
+
+class RedactUserData(BaseModel):
+    name: str
+    login: str
+
+
+class AvatarResponse(ORMModel):
+    new_avatar_url: str

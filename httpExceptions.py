@@ -30,3 +30,8 @@ video_exception = HTTPException(
     status_code=404,
     detail="Видео не найдено",
 )
+
+empty_user_data_exception = HTTPException(
+    status_code=400,
+    detail="Неверные данные пользователя",
+)
