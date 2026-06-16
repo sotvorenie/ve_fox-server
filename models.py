@@ -29,6 +29,7 @@ class UserLogin(BaseModel):
 class UserResponse(ORMModel):
     id: int
     name: str
+    login: str
     avatar_url: Optional[str] = None
 
 

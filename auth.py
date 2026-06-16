@@ -45,5 +45,5 @@ def get_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db))
             raise jwt_exception
         return user
     except Exception as e:
-        logger.error("Ошибка БД: ", e)
+        logger.error(f"Ошибка БД: {e}")
         raise db_exception
