@@ -41,7 +41,7 @@ def redact_user_data(user_data: RedactUserData, current_user: User = Depends(get
 @db_transaction
 def redact_user_data(file: UploadFile, current_user: User = Depends(get_user), db: Session = Depends(get_db)):
     suffix = Path(file.filename).suffix.lower()
-    file_name = f"{current_user.login}_{int(time.time())}{suffix}"
+    file_name = f"{current_user.id}_{int(time.time())}{suffix}"
     file_path = AVATARS_DIRECTORY / file_name
 
     try:
