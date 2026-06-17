@@ -5,11 +5,11 @@ import os
 import time
 import shutil
 
-from models import SuccessResponse, AvatarResponse, RedactUserData
+from models import SuccessResponse, AvatarResponse, PasswordResponse
 from utils import db_transaction
 from database_models import User
-from httpExceptions import empty_user_data_exception
-from auth import get_user
+from httpExceptions import empty_user_data_exception, duplication_password_exception
+from auth import get_user, pwd_context
 from config import AVATARS_DIRECTORY
 from utils import get_file_path, get_file_url
 from database import get_db
@@ -21,16 +21,44 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/user", tags=["User"])
 
 
-@router.post("/redact_data", response_model=SuccessResponse)
+@router.post("/redact_name", response_model=SuccessResponse)
 @db_transaction
-def redact_user_data(user_data: RedactUserData, current_user: User = Depends(get_user), db: Session = Depends(get_db)):
-    if not user_data.name or not user_data.login:
+def redact_user_name(name: str, current_user: User = Depends(get_user), db: Session = Depends(get_db)):
+    if not name:
         raise empty_user_data_exception
 
-    if current_user.name != user_data.name:
-        current_user.name = user_data.name
-    if current_user.login != user_data.login:
-        current_user.login = user_data.login
+    if current_user.name != name:
+        current_user.name = name
+
+    return {
+        "success": True,
+    }
+
+
+@router.post("/check_password", response_model=SuccessResponse)
+@db_transaction
+def check_user_password(data: PasswordResponse, current_user: User = Depends(get_user), db: Session = Depends(get_db)):
+    if not data.password:
+        raise empty_user_data_exception
+
+    check = pwd_context.verify(data.password, current_user.password)
+
+    return {
+        "success": check,
+    }
+
+
+@router.post("/redact_password", response_model=SuccessResponse)
+@db_transaction
+def redact_user_password(data: PasswordResponse, current_user: User = Depends(get_user), db: Session = Depends(get_db)):
+    if not data.password:
+        raise empty_user_data_exception
+
+    check = pwd_context.verify(data.password, current_user.password)
+    if check:
+        raise duplication_password_exception
+
+    current_user.password = pwd_context.hash(data.password)
 
     return {
         "success": True,

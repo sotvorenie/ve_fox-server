@@ -35,3 +35,8 @@ empty_user_data_exception = HTTPException(
     status_code=400,
     detail="Неверные данные пользователя",
 )
+
+duplication_password_exception = HTTPException(
+    status_code=400,
+    detail="Новый пароль должен отличаться от текущего",
+)

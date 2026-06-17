@@ -29,7 +29,6 @@ class UserLogin(BaseModel):
 class UserResponse(ORMModel):
     id: int
     name: str
-    login: str
     avatar_url: Optional[str] = None
 
 
@@ -127,10 +126,9 @@ class FilmsListResponse(BasePagination):
     films: list[FilmForListResponse]
 
 
-class RedactUserData(BaseModel):
-    name: str
-    login: str
-
-
 class AvatarResponse(ORMModel):
     new_avatar_url: str
+
+
+class PasswordResponse(ORMModel):
+    password: str
