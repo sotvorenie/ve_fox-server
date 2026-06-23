@@ -55,6 +55,13 @@ class Channel(Base):
 
 class ChannelSection(Base):
     __tablename__ = 'channel_sections'
+    __table_args__ = (
+        UniqueConstraint(
+            "channel_id",
+            "name",
+            name="uq_channel_section_name"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column()

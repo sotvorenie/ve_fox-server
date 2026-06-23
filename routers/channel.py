@@ -5,10 +5,13 @@ from pathlib import Path
 
 from database import get_db
 from models import (ChannelResponse, ChannelsListResponse, SectionResponse,
-                    VideosListResponse, SuccessResponse)
-from database_models import Channel, ChannelSection, Video
+                    VideosListResponse, SuccessResponse, CreateSectionRequest,
+                    SectionListResponse)
+from database_models import (Channel, ChannelSection, Video,
+                             User)
 from utils import get_offset, db_transaction
-from httpExceptions import channel_exception
+from httpExceptions import channel_exception, duplication_section_exception
+from auth import get_user
 
 from logger import get_logger
 logger = get_logger(__name__)
@@ -30,7 +33,7 @@ def get_channels(db: Session = Depends(get_db)):
     }
 
 
-@router.get("/{channel_id}/sections", response_model=SectionResponse)
+@router.get("/{channel_id}/sections", response_model=SectionListResponse)
 @db_transaction
 def get_channel_sections(channel_id: int, db: Session = Depends(get_db)):
     sections = db.scalars(
@@ -39,7 +42,7 @@ def get_channel_sections(channel_id: int, db: Session = Depends(get_db)):
     ).all()
 
     total = db.execute(
-        select(func.count(ChannelSection))
+        select(func.count(ChannelSection.id))
         .where(ChannelSection.channel_id == channel_id)
     ).scalar_one()
 
@@ -122,3 +125,32 @@ def get_channel_videos(channel_id: int,
         "limit": limit,
         "has_more": (skip + limit) < total,
     }
+
+
+@router.post("/{channel_id}/create_section", response_model=SectionResponse)
+@db_transaction
+def create_section(
+        channel_id: int,
+        data: CreateSectionRequest,
+        current_user: User = Depends(get_user),
+        db: Session = Depends(get_db)
+):
+    has_section_with_this_name = db.scalar(
+        select(
+            exists().where(
+                ChannelSection.channel_id == channel_id,
+                ChannelSection.name == data.section_name,
+            )
+        )
+    )
+    if has_section_with_this_name:
+        raise duplication_section_exception
+
+    new_section = ChannelSection(
+        name=data.section_name,
+        channel_id=channel_id,
+    )
+    db.add(new_section)
+    db.flush()
+
+    return new_section

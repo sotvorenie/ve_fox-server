@@ -60,3 +60,8 @@ photo_format_exception = HTTPException(
     status_code=400,
     detail="Неподдерживаемый формат фото"
 )
+
+duplication_section_exception = HTTPException(
+    status_code=400,
+    detail="Плейлист с таким названием уже существует"
+)

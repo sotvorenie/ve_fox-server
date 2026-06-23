@@ -64,7 +64,11 @@ class SectionResponse(ORMModel):
     id: int
     name: str
     channel_id: int
-    preview_url: str
+
+
+class SectionListResponse(ORMModel):
+    sections: list[SectionResponse]
+    total: int
 
 
 class VideoForListResponse(ORMModel):
@@ -138,3 +142,7 @@ class AvatarResponse(ORMModel):
 
 class PasswordResponse(ORMModel):
     password: str
+
+
+class CreateSectionRequest(BaseModel):
+    section_name: str
