@@ -77,7 +77,10 @@ class Video(Base):
     path: Mapped[str] = mapped_column(String, unique=True)
     name: Mapped[str] = mapped_column()
     video_url: Mapped[str] = mapped_column()
-    date: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    date: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
     duration: Mapped[int] = mapped_column()
     tags: Mapped[List[str]] = mapped_column(ARRAY(String), server_default=text("'{}'"), nullable=False)
     views: Mapped[int] = mapped_column(default=0, server_default='0', nullable=False)
@@ -94,7 +97,7 @@ class Video(Base):
                                                  )
 
     channel_id: Mapped[int] = mapped_column(ForeignKey('channels.id', ondelete='CASCADE'), index=True)
-    section_id: Mapped[Optional[str]] = mapped_column(ForeignKey('channel_sections.id', ondelete='SET NULL'),
+    section_id: Mapped[Optional[int]] = mapped_column(ForeignKey('channel_sections.id', ondelete='SET NULL'),
                                                    nullable=True
                                                    )
 

@@ -12,7 +12,7 @@ db_exception = HTTPException(
 )
 
 registration_exception = HTTPException(
-    status_code=400,
+    status_code=409,
     detail="Пользователь с таким логином уже существует",
 )
 
@@ -39,4 +39,24 @@ empty_user_data_exception = HTTPException(
 duplication_password_exception = HTTPException(
     status_code=400,
     detail="Новый пароль должен отличаться от текущего",
+)
+
+section_exception = HTTPException(
+    status_code=400,
+    detail="Данный плейлист не принадлежит каналу",
+)
+
+uploaded_video_exception = HTTPException(
+    status_code=400,
+    detail="Данные видео некорректны",
+)
+
+video_format_exception = HTTPException(
+    status_code=400,
+    detail="Неподдерживаемый формат видео"
+)
+
+photo_format_exception = HTTPException(
+    status_code=400,
+    detail="Неподдерживаемый формат фото"
 )

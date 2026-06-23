@@ -1,4 +1,5 @@
 import math
+import re
 from pathlib import Path
 import functools
 from datetime import datetime, timezone
@@ -39,6 +40,17 @@ def normalize_name(name: str) -> str:
              .replace("—", " "))
             .replace("!", " ")
             .replace("!!", " "))
+
+
+# убираем из названия папки для видео ненужные символы
+def normalize_path_name(name: str) -> str:
+    name = name.strip().lower()
+
+    return re.sub(
+        r'[\\/:*?"<>|]+',
+        '_',
+        name
+    )
 
 
 # если у видео нет превью - получаем его рандомно
