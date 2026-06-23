@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func
+from sqlalchemy import select, func, exists
 from pathlib import Path
 
 from database import get_db
-from models import ChannelResponse, SectionResponse, VideosListResponse
+from models import (ChannelResponse, ChannelsListResponse, SectionResponse,
+                    VideosListResponse, SuccessResponse)
 from database_models import Channel, ChannelSection, Video
 from utils import get_offset, db_transaction
 from httpExceptions import channel_exception
@@ -16,11 +17,17 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/channel", tags=["Channel"])
 
 
-@router.get("/all", response_model=list[ChannelResponse])
+@router.get("/all", response_model=ChannelsListResponse)
 @db_transaction
 def get_channels(db: Session = Depends(get_db)):
     channels = db.scalars(select(Channel)).all()
-    return channels
+
+    total = db.execute(select(func.count(Channel.id))).scalar_one()
+
+    return {
+        "channels": channels,
+        "total": total
+    }
 
 
 @router.get("/{channel_id}/sections", response_model=SectionResponse)
@@ -30,7 +37,30 @@ def get_channel_sections(channel_id: int, db: Session = Depends(get_db)):
         select(ChannelSection)
         .where(ChannelSection.channel_id == channel_id)
     ).all()
-    return sections
+
+    total = db.execute(
+        select(func.count(ChannelSection))
+        .where(ChannelSection.channel_id == channel_id)
+    ).scalar_one()
+
+    return {
+        "sections": sections,
+        "total": total
+    }
+
+
+@router.get("/{channel_id}/has_sections", response_model=SuccessResponse)
+@db_transaction
+def check_has_channel_sections(channel_id: int, db: Session = Depends(get_db)):
+    has_sections = db.scalar(
+        select(
+            exists().where(ChannelSection.channel_id == channel_id)
+        )
+    )
+
+    return {
+        "success": has_sections,
+    }
 
 
 @router.get("/{channel_id}", response_model=ChannelResponse)

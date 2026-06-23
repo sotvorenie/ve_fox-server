@@ -40,6 +40,25 @@ def get_all_videos(page: int = 1, limit: int = 21, seed: float = 0.5, db: Sessio
     }
 
 
+@router.get("/all_from_section/{section_id: int}", response_model=VideosListResponse)
+@db_transaction
+def get_all_videos(section_id: int, db: Session = Depends(get_db)):
+    videos = db.scalars(select(Video)
+                        .where(Video.section_id == section_id)
+                        .options(joinedload(Video.channel))
+                        ).all()
+
+    total = db.execute(select(func.count(Video.id))).scalar_one()
+
+    return {
+        "videos": videos,
+        "total": total,
+        "page": 1,
+        "limit": 0,
+        "has_more": False,
+    }
+
+
 @router.get("/{video_id}", response_model=VideoResponse)
 @db_transaction
 def get_video(video_id: int, db: Session = Depends(get_db)):

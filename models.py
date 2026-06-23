@@ -55,10 +55,16 @@ class ChannelForListResponse(ORMModel):
     avatar_url: Optional[str] = None
 
 
+class ChannelsListResponse(ORMModel):
+    channels: list[ChannelForListResponse]
+    total: int
+
+
 class SectionResponse(ORMModel):
     id: int
     name: str
     channel_id: int
+    preview_url: str
 
 
 class VideoForListResponse(ORMModel):
