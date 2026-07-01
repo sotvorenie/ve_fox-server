@@ -1,8 +1,10 @@
 from pathlib import Path
 
+BASE_STORAGE_DIR = Path(r"E:\server\veFox").resolve()
 
-VIDEO_DIRECTORY = Path(r"E:\server\veFox")
-AVATARS_DIRECTORY = VIDEO_DIRECTORY / "users_avatars"
+VIDEO_DIRECTORY = BASE_STORAGE_DIR / "videos"
+FILMS_DIRECTORY = BASE_STORAGE_DIR / "films"
+AVATARS_DIRECTORY = BASE_STORAGE_DIR / "users_avatars"
 
 ALLOWED_VIDEO_SUFFIX = {".mp4", ".mkv", ".avi", ".mov"}
 ALLOWED_SUBTITLES_SUFFIX = {".vtt"}

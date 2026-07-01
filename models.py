@@ -86,6 +86,7 @@ class VideoResponse(ORMModel):
     id: int
     name: str
     video_url: str
+    preview_url: str
     date: datetime
     duration: float
     views: int

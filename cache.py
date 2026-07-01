@@ -7,7 +7,7 @@ from utils import (_safe_listdir, get_tags_by_title, get_create_date,
                    get_video_file, get_photo_file, get_video_url,
                    get_photo_url, get_subtitles_file, get_video_duration,
                    get_subtitles_url, get_and_set_video_info)
-from config import VIDEO_DIRECTORY
+from config import VIDEO_DIRECTORY, BASE_STORAGE_DIR, FILMS_DIRECTORY
 from database_models import (Channel, Video, Film,
                              FilmGenre, FilmActor)
 from database import SessionLocal
@@ -108,8 +108,6 @@ class DateSynchronizer:
     def __init__(self, db: Session):
         self.db = db
         self.state = SyncState()
-        self.video_directory = VIDEO_DIRECTORY / "videos"
-        self.films_directory = VIDEO_DIRECTORY / "films"
 
     def load_existing(self):
         self.state.existing_channels = {
@@ -148,7 +146,7 @@ class DateSynchronizer:
         return False
 
     def sync_channels(self):
-        for channel_dir in _safe_listdir(self.video_directory):
+        for channel_dir in _safe_listdir(VIDEO_DIRECTORY):
             if not channel_dir.is_dir():
                 logger.warning(f"Канал {channel_dir.name} не является папкой")
                 continue
@@ -158,7 +156,7 @@ class DateSynchronizer:
             channel_avatar = get_photo_file(channel_dir)
             channel_avatar_url = get_photo_url(channel_avatar, channel_dir)
 
-            channel_path_str = str(channel_dir)
+            channel_path_str = channel_dir.relative_to(BASE_STORAGE_DIR).as_posix()
             self.state.actual_channels_paths.add(channel_path_str)
 
             if channel_path_str in self.state.existing_channels:
@@ -207,7 +205,7 @@ class DateSynchronizer:
                 logger.warning(f"В папке видео {video.name} нет видеоматериала..")
                 continue
 
-            video_path_str = str(video)
+            video_path_str = video.relative_to(BASE_STORAGE_DIR).as_posix()
 
             video_date, video_duration, video_tags = get_and_set_video_info(video, video_file)
 
@@ -257,7 +255,7 @@ class DateSynchronizer:
                 logger.info(f"В БД добавлено новое видео - {video.name}")
 
     def sync_films(self):
-        for film in _safe_listdir(self.films_directory):
+        for film in _safe_listdir(FILMS_DIRECTORY):
             if not film.is_dir():
                 logger.warning(f"Фильм {film.name} не является папкой..")
                 continue

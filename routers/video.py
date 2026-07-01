@@ -8,6 +8,7 @@ from database_models import Video
 from database import get_db
 from utils import get_video_file, get_offset, db_transaction
 from httpExceptions import video_exception
+from config import BASE_STORAGE_DIR
 
 from logger import get_logger
 logger = get_logger(__name__)
@@ -71,7 +72,7 @@ def get_video(video_id: int, db: Session = Depends(get_db)):
         logger.warning(f"В БД нет видео/информации_о_пути_видео с id={video_id}")
         raise video_exception
 
-    full_video_path = Path(video.path)
+    full_video_path = BASE_STORAGE_DIR / video.path
 
     if not full_video_path.exists() or not full_video_path.is_dir():
         logger.warning(f"Путь к папке видео {video.name} недействителен..")

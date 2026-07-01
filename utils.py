@@ -9,8 +9,10 @@ from fastapi import Depends, HTTPException
 import cv2
 import random
 import json
+from typing import Optional
 
-from config import ALLOWED_VIDEO_SUFFIX, ALLOWED_PHOTO_SUFFIX, VIDEO_DIRECTORY, ALLOWED_SUBTITLES_SUFFIX
+from config import (ALLOWED_VIDEO_SUFFIX, ALLOWED_PHOTO_SUFFIX, ALLOWED_SUBTITLES_SUFFIX,
+                    BASE_STORAGE_DIR)
 from auth import get_db
 from database_models import WatchLater, Video
 from httpExceptions import db_exception
@@ -44,7 +46,6 @@ def normalize_name(name: str) -> str:
 
 # убираем из названия папки для видео ненужные символы
 def normalize_path_name(name: str) -> str:
-    name = name.strip().lower()
 
     return re.sub(
         r'[\\/:*?"<>|]+',
@@ -125,17 +126,17 @@ def get_video_duration(video_file: Path):
 
 
 # получаем информацию о видео: дату создания, длительность, теги (здесь же создаем (если не создан) info.json)
-def get_and_set_video_info(video: Path, video_file: Path):
+def get_and_set_video_info(video: Path, video_file: Path, user_tags: Optional[list] = None):
     info_file = video / "info.json"
 
-    tags = []
+    tags_from_name = []
     needs_write = False
 
     if info_file.exists():
         try:
             with open(info_file, "r", encoding='utf-8') as file:
                 data = json.load(file)
-                tags = data.get('tags', [])
+                tags_from_name = data.get('tags', [])
         except Exception as e:
             logger.warning(f"Не удалось прочитать видео {video_file.name}: ", e)
             needs_write = True
@@ -145,8 +146,16 @@ def get_and_set_video_info(video: Path, video_file: Path):
     date = get_create_date(video_file)
     duration = get_video_duration(video_file)
 
-    if not tags:
-        tags = get_tags_by_title(video.name)
+    tags = tags_from_name
+    if user_tags:
+        tags = list(set(tags + user_tags))
+        needs_write = True
+
+    tags_from_title = get_tags_by_title(video.name)
+    new_tags = list(set(tags + tags_from_title))
+
+    if set(tags) != set(new_tags):
+        tags = new_tags
         needs_write = True
 
     if needs_write:
@@ -157,7 +166,7 @@ def get_and_set_video_info(video: Path, video_file: Path):
                 }, file, ensure_ascii=False)
             logger.info(f"Обновлена информация в json для видео {video_file.name}")
         except Exception as e:
-            logger.warning(f"Ошибка записи информации о видео {video_file.name}: ", e)
+            logger.warning(f"Ошибка записи информации о видео {video_file.name}: {e}")
 
     return date, duration, tags
 
@@ -181,7 +190,7 @@ def get_video_file(path: Path):
 
 # получаем url видео-файла
 def get_video_url(file: Path):
-    return f"/static/{file.relative_to(VIDEO_DIRECTORY).as_posix()}"
+    return f"/static/{file.relative_to(BASE_STORAGE_DIR).as_posix()}"
 
 
 # получаем фото-файл
@@ -193,15 +202,14 @@ def get_photo_file(path: Path):
 
 # получаем url фото-файла
 def get_photo_url(file: Path, path: Path):
-    photo_url = None
     if file:
-        photo_url = f"/static/{file.relative_to(VIDEO_DIRECTORY).as_posix()}"
-    else:
+        return f"/static/{file.relative_to(BASE_STORAGE_DIR).as_posix()}"
+    video_file = get_video_file(path)
+    if video_file:
         preview_path = path / "превью.jpg"
-        if create_video_preview(file, preview_path):
-            photo_url = f"/static/{preview_path.relative_to(VIDEO_DIRECTORY).as_posix()}"
-
-    return photo_url
+        if create_video_preview(video_file, preview_path):
+            return f"/static/{preview_path.relative_to(BASE_STORAGE_DIR).as_posix()}"
+    return None
 
 
 # получаем файл субтитров
@@ -214,7 +222,7 @@ def get_subtitles_file(video: Path):
 
 # получаем url субтитров
 def get_subtitles_url(subtitles: Path):
-    return f"/static/{subtitles.relative_to(VIDEO_DIRECTORY).as_posix()}"
+    return f"/static/{subtitles.relative_to(BASE_STORAGE_DIR).as_posix()}"
 
 
 # проверяем: добавлено ли видео в раздел "Смотреть позже"
@@ -244,7 +252,7 @@ def db_transaction(function):
         except Exception as e:
             if db:
                 db.rollback()
-            logger.error(f"Ошибка базы данных: ", e)
+            logger.error("Ошибка базы данных: %s", e)
             raise db_exception
 
     return wrapper
@@ -254,15 +262,15 @@ def db_transaction(function):
 def get_file_path(url: str):
     if not url:
         return None
-    relative_path = Path(url.replace("static/", "", 1))
-    return VIDEO_DIRECTORY / relative_path
+    relative_path = url.lstrip('/').replace("static/", "", 1)
+    return BASE_STORAGE_DIR / relative_path
 
 
 # получаем url файла
 def get_file_url(path: Path):
     if not path:
         return None
-    return f"static/{path.relative_to(VIDEO_DIRECTORY).as_posix()}"
+    return f"/static/{path.relative_to(BASE_STORAGE_DIR).as_posix()}"
 
 
 # получаем total и список видео с таблицы: для watch_later, like, history
