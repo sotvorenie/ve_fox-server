@@ -25,7 +25,7 @@ def set_watch_later(video_id: int, current_user: User = Depends(get_user), db: S
         logger.warning(f"Видео с id={video_id} нет в БД..")
         raise video_exception
 
-    check_watch_later_db = check_watch_later(video_id, current_user.id)
+    check_watch_later_db = check_watch_later(video_id, current_user.id, db)
 
     if check_watch_later_db:
         watch_later_db = db.execute(select(WatchLater)
@@ -44,8 +44,8 @@ def set_watch_later(video_id: int, current_user: User = Depends(get_user), db: S
 
 @router.get("/is_watch_later/{video_id}", response_model=IsWatchLaterResponse)
 @db_transaction
-def check_is_watch_later(video_id: int, current_user: User = Depends(get_user)):
-    is_watch_later = check_watch_later(video_id, current_user.id)
+def check_is_watch_later(video_id: int, current_user: User = Depends(get_user), db: Session = Depends(get_db)):
+    is_watch_later = check_watch_later(video_id, current_user.id, db)
 
     return {"is_watch_later": is_watch_later}
 
