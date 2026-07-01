@@ -1,12 +1,11 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_, func, select
+from sqlalchemy import or_, func, select, and_
 
 from models import SearchResponse
 from database_models import Channel, Video
 from utils import get_offset, db_transaction, get_tags_by_title
 from database import get_db
-
 
 router = APIRouter(prefix="/search", tags=["Search"])
 
@@ -16,28 +15,44 @@ router = APIRouter(prefix="/search", tags=["Search"])
 def search(value: str, page: int = 1, limit: int = 21, db: Session = Depends(get_db)):
     skip = get_offset(page, limit)
 
-    value_lower = f"%{value.lower()}%"
-    tags = get_tags_by_title(value)
+    words = [w.strip() for w in value.split() if w.strip()]
 
-    channels = db.scalars(select(Channel).where(Channel.name.ilike(value_lower)).limit(3)).all()
-    channels_id = [c.id for c in channels]
+    video_filters = []
+    channel_names_filters = []
 
-    filters = []
-    if tags:
-        filters.append(Video.tags.overlap(tags))
-    if channels_id:
-        filters.append(Channel.id.in_(channels_id))
-    if not filters:
-        filters.append(Video.name.ilike(value_lower))
+    for word in words:
+        value_lower = f"%{word.lower()}%"
 
-    videos = db.scalars(select(Video)
-                        .where(or_(*filters))
-                        .options(joinedload(Video.channel))
-                        .offset(skip)
-                        .limit(limit)
-                        ).all()
+        video_filters.append(Video.name.ilike(value_lower))
+        video_filters.append(func.array_to_string(Video.tags, ',').ilike(value_lower))
+        channel_names_filters.append(Channel.name.ilike(value_lower))
 
-    total = db.scalar(select(func.count(Video.id)).where(or_(*filters)))
+    channels = db.scalars(
+        select(Channel)
+        .where(or_(*channel_names_filters))
+        .limit(3)
+    ).all()
+    channels_ids = [c.id for c in channels]
+
+    if channels_ids:
+        video_filters.append(Video.channel_id.in_(channels_ids))
+
+    query = (
+        select(Video)
+        .join(Channel, Video.channel_id == Channel.id)
+        .where(or_(*video_filters))
+        .options(joinedload(Video.channel))
+        .distinct()
+        .offset(skip)
+        .limit(limit)
+    )
+    videos = db.scalars(query).all()
+
+    total = db.scalar(
+        select(func.count(Video.id.distinct()))
+        .join(Channel, Video.channel_id == Channel.id)
+        .where(or_(*video_filters))
+    )
 
     return {
         "channels": channels,
