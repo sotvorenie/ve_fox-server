@@ -11,6 +11,7 @@ from utils import check_watch_later, db_transaction, get_total_and_videos_from_d
 from httpExceptions import video_exception
 
 from logger import get_logger
+
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/watch_later", tags=["WatchLater"])
@@ -28,11 +29,12 @@ def set_watch_later(video_id: int, current_user: User = Depends(get_user), db: S
     check_watch_later_db = check_watch_later(video_id, current_user.id, db)
 
     if check_watch_later_db:
-        watch_later_db = db.execute(select(WatchLater)
-                                    .where(and_(
-                                        WatchLater.video_id == video_id,
-                                        WatchLater.user_id == current_user.id))
-                                    ).scalar_one_or_none()
+        watch_later_db = db.execute(
+            select(WatchLater)
+            .where(and_(
+                WatchLater.video_id == video_id,
+                WatchLater.user_id == current_user.id))
+        ).scalar_one_or_none()
         if watch_later_db:
             watch_later_db.date = datetime.now(timezone.utc)
     else:
@@ -59,11 +61,12 @@ def delete_from_watch_later(video_id: int, current_user: User = Depends(get_user
         logger.warning(f"Видео с id={video_id} нет в БД..")
         raise video_exception
 
-    db.execute(delete(WatchLater)
-                        .where(and_(
-                            WatchLater.video_id == video_id,
-                            WatchLater.user_id == current_user.id))
-                        )
+    db.execute(
+        delete(WatchLater)
+        .where(and_(
+            WatchLater.video_id == video_id,
+            WatchLater.user_id == current_user.id))
+    )
 
     return {"success": True}
 
