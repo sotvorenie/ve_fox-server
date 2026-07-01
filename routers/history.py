@@ -33,15 +33,17 @@ def set_to_history(video_id: int, current_user: User = Depends(get_user), db: Se
         new_history = History(user_id=current_user.id, video_id=video_id)
         db.add(new_history)
 
+    db.flush()
+
     total = db.scalar(select(func.count(History.id)).where(History.user_id == current_user.id))
     if total > 100:
-        last_history_video_id = (select(History.id)
-                                 .where(History.user_id == current_user.id)
-                                 .order_by(History.date.asc())
-                                 .limit(1)
-                                 .scalar_subquery()
-                                 )
-        db.execute(delete(History).where(History.id == last_history_video_id))
+        oldest_id = db.scalar(
+            select(History.id)
+            .where(History.user_id == current_user.id)
+            .order_by(History.date.asc())
+            .limit(1)
+        )
+        db.execute(delete(History).where(History.id == oldest_id))
 
     return {'success': True}
 
