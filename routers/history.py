@@ -11,8 +11,8 @@ from utils import db_transaction, get_total_and_videos_from_db
 from httpExceptions import video_exception
 
 from logger import get_logger
-logger = get_logger(__name__)
 
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/history", tags=["History"])
 
@@ -25,7 +25,12 @@ def set_to_history(video_id: int, current_user: User = Depends(get_user), db: Se
         logger.warning(f"Видео с id={video_id} нет в БД..")
         raise video_exception
 
-    history_entry = db.execute(select(History).where(History.user_id == current_user.id)).scalar_one_or_none()
+    history_entry = (db.execute(select(History)
+                                .where(
+                                    History.user_id == current_user.id,
+                                    History.video_id == video_id
+                                ))
+                     .scalar_one_or_none())
 
     if history_entry:
         history_entry.date = datetime.now(timezone.utc)
@@ -54,4 +59,4 @@ def get_list_history(page: int = 1,
                      limit: int = 21,
                      current_user: User = Depends(get_user),
                      db: Session = Depends(get_db)):
-    return get_total_and_videos_from_db(History, current_user, page, limit, db)
+    return get_total_and_videos_from_db(History, current_user.id, page, limit, db)

@@ -46,7 +46,6 @@ def normalize_name(name: str) -> str:
 
 # убираем из названия папки для видео ненужные символы
 def normalize_path_name(name: str) -> str:
-
     return re.sub(
         r'[\\/:*?"<>|]+',
         '_',
@@ -277,12 +276,13 @@ def get_file_url(path: Path):
 def get_total_and_videos_from_db(model, user_id, page, limit, db):
     skip = get_offset(page, limit)
 
-    videos = db.scalars(select(model)
-                        .where(model.user_id == user_id)
-                        .options(joinedload(model.video).joinedload(Video.channel))
-                        .order_by(model.date.desc())
-                        .offset(skip)
-                        .limit(limit)).all()
+    entries = db.scalars(select(model)
+                         .where(model.user_id == user_id)
+                         .options(joinedload(model.video).joinedload(Video.channel))
+                         .order_by(model.date.desc())
+                         .offset(skip)
+                         .limit(limit)).all()
+    videos = [entry.video for entry in entries]
     total = db.scalar(select(func.count(model.id)).where(model.user_id == user_id))
 
     return {
