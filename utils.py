@@ -14,7 +14,7 @@ from typing import Optional
 from config import (ALLOWED_VIDEO_SUFFIX, ALLOWED_PHOTO_SUFFIX, ALLOWED_SUBTITLES_SUFFIX,
                     BASE_STORAGE_DIR)
 from auth import get_db
-from database_models import WatchLater, Video
+from database_models import WatchLater, Video, User
 from httpExceptions import db_exception
 
 from logger import get_logger
@@ -292,3 +292,14 @@ def get_total_and_videos_from_db(model, user_id, page, limit, db):
         "limit": limit,
         "has_more": (skip + limit) < total,
     }
+
+
+# получаем сохраненное время просмотра для видео
+def get_saved_time(videos: list, current_user: Optional[User]):
+    if not current_user:
+        return
+    for v in videos:
+        if hasattr(v, 'saved_times') and v.saved_times:
+            v.saved_time = v.saved_times[0].time
+        else:
+            v.saved_time = None

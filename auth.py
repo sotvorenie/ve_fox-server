@@ -47,3 +47,24 @@ def get_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db))
     except Exception as e:
         logger.error(f"Ошибка БД: {e}")
         raise db_exception
+
+
+def get_safely_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            return None
+    except JWTError:
+        return None
+
+    try:
+        user = db.execute(
+            select(User).where(User.id == int(user_id))
+        ).scalar_one_or_none()
+        if user is None:
+            return None
+        return user
+    except Exception as e:
+        logger.error(f"Ошибка БД: {e}")
+        return None

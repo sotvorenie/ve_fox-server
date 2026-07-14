@@ -1,16 +1,19 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import text, func, select, update, and_
-from pathlib import Path
+from typing import Optional
 
 from models import VideosListResponse, VideoResponse
-from database_models import Video
+from database_models import Video, SavedTime, User
 from database import get_db
-from utils import get_video_file, get_offset, db_transaction
+from utils import (get_video_file, get_offset, db_transaction,
+                   get_saved_time)
 from httpExceptions import video_exception
 from config import BASE_STORAGE_DIR
+from auth import get_safely_user
 
 from logger import get_logger
+
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/video", tags=["Video"])
@@ -18,19 +21,32 @@ router = APIRouter(prefix="/video", tags=["Video"])
 
 @router.get("/all", response_model=VideosListResponse)
 @db_transaction
-def get_all_videos(page: int = 1, limit: int = 21, seed: float = 0.5, db: Session = Depends(get_db)):
+def get_all_videos(
+        page: int = 1,
+        limit: int = 21,
+        seed: float = 0.5,
+        current_user: Optional[User] = Depends(get_safely_user),
+        db: Session = Depends(get_db)
+):
     skip = get_offset(page, limit)
-
     db.execute(text("SELECT setseed(:s)"), {"s": seed})
 
-    videos = db.scalars(select(Video)
-                        .options(joinedload(Video.channel))
-                        .order_by(func.random())
-                        .offset(skip)
-                        .limit(limit)
-                        ).all()
+    query = select(Video).options(joinedload(Video.channel))
+
+    if current_user:
+        query = query.options(
+            joinedload(Video.saved_times.and_(SavedTime.user_id == current_user.id))
+        )
+
+    videos = list(db.scalars(
+        query.order_by(func.random())
+        .offset(skip)
+        .limit(limit)
+    ).unique().all())
 
     total = db.execute(select(func.count(Video.id))).scalar_one()
+
+    get_saved_time(videos, current_user)
 
     return {
         "videos": videos,
@@ -43,13 +59,26 @@ def get_all_videos(page: int = 1, limit: int = 21, seed: float = 0.5, db: Sessio
 
 @router.get("/all_from_section/{section_id: int}", response_model=VideosListResponse)
 @db_transaction
-def get_all_videos(section_id: int, db: Session = Depends(get_db)):
-    videos = db.scalars(select(Video)
-                        .where(Video.section_id == section_id)
-                        .options(joinedload(Video.channel))
-                        ).all()
+def get_all_videos(
+        section_id: int,
+        current_user: Optional[User] = Depends(get_safely_user),
+        db: Session = Depends(get_db)
+):
+    query = select(Video)
+
+    if current_user:
+        query = query.options(
+            joinedload(Video.saved_times.and_(SavedTime.user_id == current_user.id))
+        )
+
+    videos = list(db.scalars(query
+                             .where(Video.section_id == section_id)
+                             .options(joinedload(Video.channel))
+                             ).unique().all())
 
     total = db.execute(select(func.count(Video.id))).scalar_one()
+
+    get_saved_time(videos, current_user)
 
     return {
         "videos": videos,
@@ -96,6 +125,7 @@ def get_recommendations(
         page: int = 1,
         limit: int = 21,
         seed: float = 0.5,
+        current_user: Optional[User] = Depends(get_safely_user),
         db: Session = Depends(get_db)
 ):
     video = db.execute(select(Video).where(Video.id == video_id)).scalar_one_or_none()
@@ -108,15 +138,19 @@ def get_recommendations(
 
     final_videos = []
 
+    query_options = [joinedload(Video.channel)]
+    if current_user:
+        query_options.append(joinedload(Video.saved_times.and_(SavedTime.user_id == current_user.id)))
+
     if page == 1:
         if video.section_id is not None and video.section_index is not None:
             episodes = db.scalars(select(Video)
                                   .where(and_(
                                         Video.section_id == video.section_id,
                                         Video.section_index > video.section_index))
-                                  .options(joinedload(Video.channel))
+                                  .options(*query_options)
                                   .order_by(Video.section_index.asc())
-                                  .limit(2)).all()
+                                  .limit(2)).unique().all()
 
             final_videos.extend(episodes)
             used_id.update(v.id for v in episodes)
@@ -125,9 +159,9 @@ def get_recommendations(
                                    .where(and_(
                                         Video.channel_id == video.channel_id,
                                         Video.id.notin_(used_id)))
-                                   .options(joinedload(Video.channel))
+                                   .options(*query_options)
                                    .limit(3)
-                                   ).all()
+                                   ).unique().all()
         final_videos.extend(author_videos)
         used_id.update(v.id for v in author_videos)
 
@@ -135,9 +169,9 @@ def get_recommendations(
                                     .where(and_(
                                         Video.id.notin_(used_id),
                                         Video.tags.overlap(video.tags)))
-                                    .options(joinedload(Video.channel))
+                                    .options(*query_options)
                                     .limit(5)
-                                    ).all()
+                                    ).unique().all()
 
         final_videos.extend(similar_videos)
         used_id.update(v.id for v in similar_videos)
@@ -149,15 +183,17 @@ def get_recommendations(
     needed = limit - len(final_videos)
     random_videos = db.scalars(select(Video)
                                .where(Video.id.notin_(list(used_id)))
-                               .options(joinedload(Video.channel))
+                               .options(*query_options)
                                .order_by(func.random())
                                .offset(skip)
                                .limit(needed)
-                               ).all()
+                               ).unique().all()
 
     final_videos.extend(random_videos)
 
     total = db.scalar(select(func.count(Video.id)))
+
+    get_saved_time(final_videos, current_user)
 
     return {
         "videos": final_videos,

@@ -80,6 +80,7 @@ class VideoForListResponse(ORMModel):
     video_url: str
     channel: ChannelForListResponse
     preview_url: Optional[str] = None
+    saved_time: Optional[float] = None
 
 
 class VideoResponse(ORMModel):

@@ -105,11 +105,12 @@ class Video(Base):
 
     channel_id: Mapped[int] = mapped_column(ForeignKey('channels.id', ondelete='CASCADE'), index=True)
     section_id: Mapped[Optional[int]] = mapped_column(ForeignKey('channel_sections.id', ondelete='SET NULL'),
-                                                   nullable=True
-                                                   )
+                                                      nullable=True
+                                                      )
 
     channel: Mapped["Channel"] = relationship(back_populates='videos')
     section: Mapped["ChannelSection"] = relationship(back_populates='videos')
+    saved_times: Mapped[List["SavedTime"]] = relationship(back_populates='video')
 
 
 film_actor_association = Table(
@@ -209,7 +210,7 @@ class SavedTime(Base):
     video_id: Mapped[int] = mapped_column(ForeignKey('videos.id', ondelete='CASCADE'), index=True)
 
     user: Mapped["User"] = relationship(back_populates='saved_times')
-    video: Mapped["Video"] = relationship()
+    video: Mapped["Video"] = relationship(back_populates='saved_times')
 
 
 class WatchLater(Base):
