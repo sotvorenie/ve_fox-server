@@ -59,7 +59,7 @@ def get_all_videos(
 
 @router.get("/all_from_section/{section_id: int}", response_model=VideosListResponse)
 @db_transaction
-def get_all_videos(
+def get_all_videos_from_section(
         section_id: int,
         current_user: Optional[User] = Depends(get_safely_user),
         db: Session = Depends(get_db)
