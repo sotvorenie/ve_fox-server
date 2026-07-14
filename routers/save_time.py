@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import select, and_, delete
 
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/save_time", tags=["SaveTime"])
 @router.post("/set/{video_id}", response_model=SuccessResponse)
 @db_transaction
 def save_time(video_id: int,
-              time: float,
+              time: float = Body(..., embed=True),
               current_user: User = Depends(get_user),
               db: Session = Depends(get_db)):
     saved_entry = db.execute(select(SavedTime)
