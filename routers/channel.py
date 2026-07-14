@@ -90,6 +90,7 @@ def get_channel_videos(channel_id: int,
                        page: int = 1,
                        limit: int = 21,
                        is_new: bool = True,
+                       is_popular: bool = False,
                        db: Session = Depends(get_db)):
     skip = get_offset(page, limit)
 
@@ -107,6 +108,8 @@ def get_channel_videos(channel_id: int,
 
     if is_new:
         query = query.order_by(Video.date.desc())
+    elif is_popular:
+        query = query.order_by(Video.views.desc())
     else:
         query = query.order_by(Video.date.asc())
 
