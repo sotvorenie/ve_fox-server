@@ -12,6 +12,7 @@ from database_models import (Channel, ChannelSection, Video,
 from utils import get_offset, db_transaction
 from httpExceptions import channel_exception, duplication_section_exception
 from auth import get_user
+from config import BASE_STORAGE_DIR
 
 from logger import get_logger
 logger = get_logger(__name__)
@@ -75,8 +76,9 @@ def get_channel(channel_id: int, db: Session = Depends(get_db)):
         logger.warning(f"В БД нет канала/информации_о_пути_канала с id={channel_id}")
         raise channel_exception
 
-    if not Path(channel_db.path).exists():
-        logger.warning(f"Путь к папке канала{channel_db.name} недействителен..")
+    if not Path(BASE_STORAGE_DIR / channel_db.path).exists():
+        logger.warning(f"Путь к папке канала {channel_db.name} недействителен..")
+        print(channel_db.path)
         raise channel_exception
 
     return channel_db
@@ -97,8 +99,8 @@ def get_channel_videos(channel_id: int,
         logger.warning(f"В БД нет канала/информации_о_пути_канала с id={channel_id}")
         raise channel_exception
 
-    if not Path(channel.path).exists():
-        logger.warning(f"Путь к папке канала{channel.name} недействителен..")
+    if not Path(BASE_STORAGE_DIR / channel.path).exists():
+        logger.warning(f"Путь к папке канала {channel.name} недействителен..")
         raise channel_exception
 
     query = select(Video).where(Video.channel_id == channel_id)
