@@ -5,7 +5,8 @@ import os
 import time
 import shutil
 
-from models import SuccessResponse, AvatarResponse, PasswordResponse
+from models import (SuccessResponse, AvatarResponse, PasswordResponse,
+                    RouterMapRequest, RouterMapResponse)
 from utils import db_transaction
 from database_models import User
 from httpExceptions import empty_user_data_exception, duplication_password_exception
@@ -93,3 +94,25 @@ def redact_user_avatar(file: UploadFile, current_user: User = Depends(get_user),
     return {
         "new_avatar_url": new_avatar_url
     }
+
+
+@router.post("/set_router_map", response_model=SuccessResponse)
+@db_transaction
+def set_user_router_map(
+        data: RouterMapRequest,
+        current_user: User = Depends(get_user),
+        db: Session = Depends(get_db)
+):
+    current_user.router_map = data.router_map
+
+    return {"success": True}
+
+
+@router.get("/get_router_map", response_model=RouterMapResponse)
+@db_transaction
+def get_user_router_map(
+        current_user: User = Depends(get_user),
+        db: Session = Depends(get_db)
+):
+    router_map = current_user.router_map if current_user.router_map else ''
+    return {"router_map": router_map}

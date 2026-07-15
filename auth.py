@@ -2,7 +2,7 @@ from passlib.context import CryptContext
 from jose import jwt, JWTError
 from datetime import datetime, timedelta, timezone
 from fastapi import Depends
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordBearer, HTTPBearer
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
@@ -16,6 +16,7 @@ logger = get_logger(__name__)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__ident="2b")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth")
+optional_oauth2_scheme = HTTPBearer(auto_error=False)
 
 
 # создаем jwt-токен
@@ -49,9 +50,12 @@ def get_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db))
         raise db_exception
 
 
-def get_safely_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+def get_safely_user(auth: str = Depends(optional_oauth2_scheme), db: Session = Depends(get_db)):
+    if auth is None:
+        return None
+
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
+        payload = jwt.decode(auth.credentials, SECRET_KEY, algorithms=['HS256'])
         user_id: str = payload.get("sub")
         if user_id is None:
             return None

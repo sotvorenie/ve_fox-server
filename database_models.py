@@ -1,6 +1,7 @@
 from sqlalchemy import (Column, Integer, String,
                         ForeignKey, DateTime, Table,
-                        UniqueConstraint, Index, text)
+                        UniqueConstraint, Index, text,
+                        Text)
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy import func
@@ -18,6 +19,7 @@ class User(Base):
     login: Mapped[str] = mapped_column(String(20), unique=True)
     password: Mapped[str] = mapped_column(String(255))
     avatar_url: Mapped[Optional[str]] = mapped_column(nullable=True)
+    router_map: Mapped[str] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),

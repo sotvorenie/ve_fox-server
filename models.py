@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 
@@ -30,6 +30,7 @@ class UserResponse(ORMModel):
     id: int
     name: str
     avatar_url: Optional[str] = None
+    router_map: Optional[str] = None
 
 
 class MeResponse(ORMModel):
@@ -148,3 +149,11 @@ class PasswordResponse(ORMModel):
 
 class CreateSectionRequest(BaseModel):
     section_name: str
+
+
+class RouterMapRequest(BaseModel):
+    router_map: Optional[str] = None
+
+
+class RouterMapResponse(ORMModel):
+    router_map: Optional[str] = None
