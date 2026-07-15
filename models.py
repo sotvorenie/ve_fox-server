@@ -1,6 +1,6 @@
 from datetime import datetime
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 
 
 class ORMModel(BaseModel):
@@ -31,6 +31,7 @@ class UserResponse(ORMModel):
     name: str
     avatar_url: Optional[str] = None
     router_map: Optional[str] = None
+    search_history: Optional[str] = None
 
 
 class MeResponse(ORMModel):
@@ -156,4 +157,12 @@ class RouterMapRequest(BaseModel):
 
 
 class RouterMapResponse(ORMModel):
-    router_map: Optional[str] = None
+    router_map: Optional[list] = None
+
+
+class SearchHistoryRequest(BaseModel):
+    search: str
+
+
+class SearchHistoryResponse(ORMModel):
+    search_history: Optional[List[str]] = None
