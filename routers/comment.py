@@ -5,8 +5,8 @@ from sqlalchemy import (select, func, and_,
                         case)
 from typing import Optional
 
-from models import (CommentsListResponse, SuccessResponse, CommentBaseResponse,
-                    LikeResponse)
+from models import (CommentsListResponse, SuccessResponse, LikeResponse,
+                    CommentForListResponse)
 from database_models import User, Comment, CommentLike
 from auth import get_user, get_safely_user
 from database import get_db
@@ -137,7 +137,7 @@ def get_comment_answers(
     }
 
 
-@router.post("/add/{video_id}", response_model=CommentBaseResponse)
+@router.post("/add/{video_id}", response_model=CommentForListResponse)
 @db_transaction
 def add_comment(
         video_id: int,
@@ -159,10 +159,13 @@ def add_comment(
     db.flush()
     db.refresh(new_comment)
 
+    new_comment.question_comments_count = 0
+    new_comment.is_liked = False
+
     return new_comment
 
 
-@router.patch("/redact/{comment_id}", response_model=CommentBaseResponse)
+@router.patch("/redact/{comment_id}", response_model=CommentForListResponse)
 @db_transaction
 def edit_comment(
         comment_id: int,
@@ -184,6 +187,9 @@ def edit_comment(
 
     db.flush()
     db.refresh(comment)
+
+    comment.question_comments_count = 0
+    comment.is_liked = False
 
     return comment
 

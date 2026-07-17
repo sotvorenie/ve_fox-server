@@ -177,6 +177,7 @@ class CommentBaseResponse(ORMModel):
     date: datetime
     redact_date: Optional[datetime] = None
     likes: int
+    is_redacted: bool
     user: UserBaseResponse
 
 
