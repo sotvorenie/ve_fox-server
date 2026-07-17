@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Optional, List
 
 
@@ -26,10 +26,13 @@ class UserLogin(BaseModel):
     password: str
 
 
-class UserResponse(ORMModel):
+class UserBaseResponse(ORMModel):
     id: int
     name: str
     avatar_url: Optional[str] = None
+
+
+class UserResponse(UserBaseResponse):
     router_map: Optional[str] = None
     search_history: Optional[str] = None
 
@@ -166,3 +169,21 @@ class SearchHistoryRequest(BaseModel):
 
 class SearchHistoryResponse(ORMModel):
     search_history: Optional[List[str]] = None
+
+
+class CommentBaseResponse(ORMModel):
+    id: int
+    text: str
+    date: datetime
+    redact_date: Optional[datetime] = None
+    likes: int
+    user: UserBaseResponse
+
+
+class CommentForListResponse(CommentBaseResponse):
+    question_comments_count: int
+    is_liked: bool
+
+
+class CommentsListResponse(BasePagination):
+    comments: list[CommentForListResponse]

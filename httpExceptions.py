@@ -65,3 +65,13 @@ duplication_section_exception = HTTPException(
     status_code=400,
     detail="Плейлист с таким названием уже существует"
 )
+
+no_comment_exception = HTTPException(
+    status_code=404,
+    detail="Комментарий не найден"
+)
+
+not_my_comment_exception = HTTPException(
+    status_code=403,
+    detail="Вы не можете редактировать чужой комментарий"
+)

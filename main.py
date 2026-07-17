@@ -9,7 +9,7 @@ from database_models import Channel, Video
 from routers import (auth, channel, history,
                      like, save_time, search,
                      video, watch_later, user,
-                     upload)
+                     upload, comment)
 from logger import setup_logger, get_logger
 from httpExceptions import db_exception
 
@@ -36,7 +36,7 @@ app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,  # type: ignore
     allow_origins=["*"],
-    allow_methods=['GET', 'POST'],
+    allow_methods=['GET', 'POST', 'PATCH'],
     allow_headers=['*'],
 )
 
@@ -50,6 +50,7 @@ app.include_router(video.router)
 app.include_router(watch_later.router)
 app.include_router(user.router)
 app.include_router(upload.router)
+app.include_router(comment.router)
 
 
 # if VIDEO_DIRECTORY.exists() and VIDEO_DIRECTORY.is_dir():

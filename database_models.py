@@ -229,3 +229,45 @@ class WatchLater(Base):
 
     user: Mapped["User"] = relationship(back_populates='watch_later')
     video: Mapped["Video"] = relationship()
+
+
+class Comment(Base):
+    __tablename__ = 'comments'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    text: Mapped[str] = mapped_column(String(1000))
+    date: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    is_redacted: Mapped[bool] = mapped_column(default=False)
+    likes: Mapped[int] = mapped_column(default=0, server_default='0', nullable=False)
+
+    parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey('comments.id', ondelete='CASCADE'), nullable=True)
+
+    user_id: Mapped[int] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'))
+    video_id: Mapped[int] = mapped_column(ForeignKey('videos.id', ondelete='CASCADE'), index=True)
+
+    user: Mapped["User"] = relationship()
+    video: Mapped["Video"] = relationship()
+
+    parent: Mapped[Optional["Comment"]] = relationship(
+        "Comment",
+        remote_side=[id],
+        back_populates="replies"
+    )
+    replies: Mapped[List["Comment"]] = relationship(
+        "Comment",
+        back_populates="parent",
+        cascade="all, delete-orphan"
+    )
+
+
+class CommentLike(Base):
+    __tablename__ = 'comment_likes'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    date: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user_id: Mapped[int] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'))
+    comment_id: Mapped[int] = mapped_column(ForeignKey('comments.id', ondelete='CASCADE'), index=True)
+
+    user: Mapped["User"] = relationship()
+    comment: Mapped["Comment"] = relationship()
