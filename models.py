@@ -188,3 +188,7 @@ class CommentForListResponse(CommentBaseResponse):
 
 class CommentsListResponse(BasePagination):
     comments: list[CommentForListResponse]
+
+
+class DeletedCommentsCountResponse(ORMModel):
+    deleted_count: int

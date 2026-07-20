@@ -5,8 +5,8 @@ from sqlalchemy import (select, func, and_,
                         case)
 from typing import Optional
 
-from models import (CommentsListResponse, SuccessResponse, LikeResponse,
-                    CommentForListResponse)
+from models import (CommentsListResponse, LikeResponse, CommentForListResponse,
+                    DeletedCommentsCountResponse)
 from database_models import User, Comment, CommentLike
 from auth import get_user, get_safely_user
 from database import get_db
@@ -18,6 +18,29 @@ from logger import get_logger
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/comment", tags=["Comment"])
+
+
+# рекурсивно подсчитываем общее количество ответов на комментарий
+def get_total_replies_subquery():
+    recursive_replies = (
+        select(Comment.id.label("id"), Comment.parent_id.label("root_parent_id"))
+        .where(Comment.parent_id.is_not(None))
+        .cte(name="recursive_replies", recursive=True)
+    )
+    rr_alias = recursive_replies.alias()
+    child_comments = (
+        select(Comment.id, rr_alias.c.root_parent_id)
+        .join(rr_alias, Comment.parent_id == rr_alias.c.id)
+    )
+    recursive_replies = recursive_replies.union_all(child_comments)
+    return (
+        select(
+            recursive_replies.c.root_parent_id.label("parent_id"),
+            func.count(recursive_replies.c.id).label("count")
+        )
+        .group_by(recursive_replies.c.root_parent_id)
+        .subquery()
+    )
 
 
 @router.get("/{video_id}", response_model=CommentsListResponse)
@@ -45,16 +68,11 @@ def get_video_comments(
     else:
         is_liked_expr = func.lit(False).label("is_liked")
 
-    replies_count_query = (
-        select(Comment.parent_id, func.count(Comment.id).label("count"))
-        .where(Comment.parent_id.is_not(None))
-        .group_by(Comment.parent_id)
-        .subquery()
-    )
+    total_replies_query = get_total_replies_subquery()
 
     query = (
-        select(Comment, func.coalesce(replies_count_query.c.count, 0).label("replies_count"), is_liked_expr)
-        .outerjoin(replies_count_query, Comment.id == replies_count_query.c.parent_id)
+        select(Comment, func.coalesce(total_replies_query.c.count, 0).label("replies_count"), is_liked_expr)
+        .outerjoin(total_replies_query, Comment.id == total_replies_query.c.parent_id)
         .where(and_(Comment.video_id == video_id, Comment.parent_id.is_(None)))
         .options(joinedload(Comment.user))
         .order_by(Comment.date.desc() if is_new else Comment.likes.desc())
@@ -105,22 +123,22 @@ def get_comment_answers(
     else:
         is_liked_expr = func.lit(False).label("is_liked")
 
-    replies_count_query = (
-        select(Comment.parent_id, func.count(Comment.id).label("count"))
-        .where(Comment.parent_id.is_not(None))
-        .group_by(Comment.parent_id)
-        .subquery()
-    )
+    total_replies_query = get_total_replies_subquery()
 
     result = db.execute(
-        select(Comment, func.coalesce(replies_count_query.c.count, 0).label("replies_count"), is_liked_expr)
-        .outerjoin(replies_count_query, Comment.id == replies_count_query.c.parent_id)
+        select(Comment, func.coalesce(total_replies_query.c.count, 0).label("replies_count"), is_liked_expr)
+        .outerjoin(total_replies_query, Comment.id == total_replies_query.c.parent_id)
         .where(Comment.parent_id == comment_id)
         .options(joinedload(Comment.user))
         .order_by(Comment.date.desc())
         .offset(skip)
         .limit(limit)
     ).unique().all()
+
+    total_replies = db.execute(
+        select(func.count(Comment.id))
+        .where(Comment.parent_id == comment_id)
+    ).scalar_one()
 
     comments = []
     for comment, count, is_liked in result:
@@ -130,10 +148,10 @@ def get_comment_answers(
 
     return {
         "comments": comments,
-        "total": len(comments),
+        "total": total_replies,
         "page": page,
         "limit": limit,
-        "has_more": (skip + limit) < len(comments)
+        "has_more": (skip + limit) < total_replies,
     }
 
 
@@ -194,7 +212,7 @@ def edit_comment(
     return comment
 
 
-@router.post("/delete/{comment_id}", response_model=SuccessResponse)
+@router.post("/delete/{comment_id}", response_model=DeletedCommentsCountResponse)
 @db_transaction
 def delete_comment(
         comment_id: int,
@@ -208,9 +226,23 @@ def delete_comment(
     if comment.user_id != current_user.id:
         raise not_my_comment_exception
 
+    recursive_comments = (
+        select(Comment.id)
+        .where(Comment.id == comment_id)
+        .cte(name="recursive_comments", recursive=True)
+    )
+    alias_comments = select(recursive_comments.c.id).alias("ac")
+    child_comments = select(Comment.id).join(
+        alias_comments, Comment.parent_id == alias_comments.c.id
+    )
+    recursive_comments = recursive_comments.union_all(child_comments)
+    deleted_count = db.scalar(select(func.count(recursive_comments.c.id)))
+
     db.delete(comment)
 
-    return {"success": True}
+    return {
+        "deleted_count": deleted_count
+    }
 
 
 @router.post("/like/{comment_id}", response_model=LikeResponse)
